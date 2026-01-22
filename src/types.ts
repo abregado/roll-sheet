@@ -95,6 +95,25 @@ export interface DiceResult {
   sum: number;
 }
 
+// Dice Parsing Types
+export type DiceToken =
+  | { type: 'number'; value: number }
+  | { type: 'dice'; count: number; sides: number; modifiers: DiceModifier[] }
+  | { type: 'attribute'; code: string }
+  | { type: 'operator'; value: '+' | '-' | '*' | '/' }
+  | { type: 'lparen' }
+  | { type: 'rparen' };
+
+export interface DiceModifier {
+  type: 'kh' | 'kl' | 'dh' | 'dl';
+  count: number;
+}
+
+export interface ParsedFormula {
+  tokens: DiceToken[];
+  attributeRefs: string[];
+}
+
 // WebSocket Messages
 export type ClientMessage =
   | { type: 'getSheets' }
