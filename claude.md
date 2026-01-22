@@ -16,9 +16,20 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 Stored on the server, accessible by anyone. Each sheet contains:
 
 - **Attributes**: Named values with a code for roll references
-  - Types: `integer` or `string`
+  - Types: `string`, `integer`, or `derived`
   - Example: Name="Dexterity", Code="dex", Type=integer, Value=3
   - New sheets start with one string attribute: Name (code: `name`)
+  - Attributes are non-editable by default; click cog icon (visible on hover) to edit
+  - Edit mode: Enter to save, Escape to cancel
+  - Drag handle on left side for reordering
+  - Code validation: lowercase alpha + underscore only, must be unique
+
+- **Derived Attributes**: Computed values from formulas
+  - Formula can reference other integer attributes via `@code`
+  - Supported operations: `+`, `-`, `*`, `/`, `()`, `ceil()`, `floor()`
+  - Cannot reference other derived attributes or string attributes
+  - View mode shows computed result; edit mode shows formula
+  - Example: `floor((@str + @dex) / 2)`
 
 - **Roll Templates**: Predefined roll formulas
   - Name: Display label (e.g., "Attack Roll")
@@ -95,7 +106,8 @@ roll-sheet/
 ├── package.json
 ├── tsconfig.json
 ├── src/
-│   └── server.ts       # Node.js WebSocket server
+│   ├── server.ts       # Node.js WebSocket server
+│   └── types.ts        # TypeScript type definitions
 ├── public/
 │   ├── index.html      # Main HTML page
 │   ├── styles.css      # CSS styling

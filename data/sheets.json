@@ -1,0 +1,49 @@
+[
+  {
+    "id": "mkpf8m62xcirlxkz9",
+    "name": "Johnny",
+    "attributes": [
+      {
+        "name": "Text",
+        "code": "text",
+        "type": "string",
+        "value": "Strong",
+        "id": "mkpf9ew39otvkkztg",
+        "order": 0
+      },
+      {
+        "name": "Computed",
+        "code": "calc",
+        "type": "derived",
+        "formula": "ceil(@num/2)+17",
+        "id": "mkpfa6pzhj6iqmn8f",
+        "order": 1
+      },
+      {
+        "id": "mkpf8m62sjp0z7vse",
+        "name": "Name",
+        "code": "name",
+        "type": "string",
+        "value": "Johnny",
+        "order": 2
+      },
+      {
+        "name": "Number",
+        "code": "num",
+        "type": "integer",
+        "value": 7,
+        "id": "mkpfa42lyrf6b0xnw",
+        "order": 3
+      },
+      {
+        "name": "Number 2",
+        "code": "num_2",
+        "type": "integer",
+        "value": 0,
+        "id": "mkpfa57p2wzt2ubch",
+        "order": 4
+      }
+    ],
+    "rollTemplates": []
+  }
+]

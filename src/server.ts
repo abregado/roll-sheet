@@ -2,8 +2,96 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
+import {
+  CharacterSheet,
+  Attribute,
+  HistoryEntry,
+  ClientMessage,
+  ServerMessage,
+} from './types';
 
 const PORT = process.env.PORT || 3000;
+const DATA_DIR = path.join(__dirname, '../data');
+const SHEETS_FILE = path.join(DATA_DIR, 'sheets.json');
+const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// In-memory data store
+let sheets: CharacterSheet[] = loadSheets();
+let history: HistoryEntry[] = loadHistory();
+
+// Load sheets from file
+function loadSheets(): CharacterSheet[] {
+  try {
+    if (fs.existsSync(SHEETS_FILE)) {
+      const data = fs.readFileSync(SHEETS_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error('Error loading sheets:', err);
+  }
+  // Return default sheet if no data exists
+  return [createDefaultSheet()];
+}
+
+// Load history from file
+function loadHistory(): HistoryEntry[] {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      const data = fs.readFileSync(HISTORY_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error('Error loading history:', err);
+  }
+  return [];
+}
+
+// Save sheets to file
+function saveSheets(): void {
+  try {
+    fs.writeFileSync(SHEETS_FILE, JSON.stringify(sheets, null, 2));
+  } catch (err) {
+    console.error('Error saving sheets:', err);
+  }
+}
+
+// Save history to file
+function saveHistory(): void {
+  try {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+  } catch (err) {
+    console.error('Error saving history:', err);
+  }
+}
+
+// Generate unique ID
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+}
+
+// Create a default sheet with just the Name attribute
+function createDefaultSheet(name?: string): CharacterSheet {
+  return {
+    id: generateId(),
+    name: name || 'New Character',
+    attributes: [
+      {
+        id: generateId(),
+        name: 'Name',
+        code: 'name',
+        type: 'string',
+        value: name || 'New Character',
+        order: 0,
+      },
+    ],
+    rollTemplates: [],
+  };
+}
 
 // MIME types for static file serving
 const MIME_TYPES: Record<string, string> = {
@@ -47,16 +135,207 @@ const wss = new WebSocketServer({ server });
 // Track connected clients
 const clients = new Set<WebSocket>();
 
+// Send message to a single client
+function send(ws: WebSocket, message: ServerMessage): void {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(message));
+  }
+}
+
+// Broadcast message to all clients
+function broadcast(message: ServerMessage, exclude?: WebSocket): void {
+  const data = JSON.stringify(message);
+  clients.forEach((client) => {
+    if (client !== exclude && client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+}
+
+// Handle client messages
+function handleMessage(ws: WebSocket, message: ClientMessage): void {
+  switch (message.type) {
+    case 'getSheets': {
+      const sheetList = sheets.map((s) => ({ id: s.id, name: s.name }));
+      send(ws, { type: 'sheetList', sheets: sheetList });
+      break;
+    }
+
+    case 'getSheet': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        send(ws, { type: 'sheet', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'createSheet': {
+      const newSheet = createDefaultSheet(message.name);
+      sheets.push(newSheet);
+      saveSheets();
+      broadcast({ type: 'sheetCreated', sheet: newSheet });
+      break;
+    }
+
+    case 'copySheet': {
+      const sourceSheet = sheets.find((s) => s.id === message.sheetId);
+      if (sourceSheet) {
+        const copiedSheet: CharacterSheet = {
+          ...JSON.parse(JSON.stringify(sourceSheet)),
+          id: generateId(),
+          name: sourceSheet.name + ' (Copy)',
+        };
+        // Generate new IDs for attributes and templates
+        copiedSheet.attributes = copiedSheet.attributes.map((attr) => ({
+          ...attr,
+          id: generateId(),
+        }));
+        copiedSheet.rollTemplates = copiedSheet.rollTemplates.map((tmpl) => ({
+          ...tmpl,
+          id: generateId(),
+        }));
+        sheets.push(copiedSheet);
+        saveSheets();
+        broadcast({ type: 'sheetCreated', sheet: copiedSheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'deleteSheet': {
+      const index = sheets.findIndex((s) => s.id === message.sheetId);
+      if (index !== -1) {
+        sheets.splice(index, 1);
+        // Ensure at least one sheet exists
+        if (sheets.length === 0) {
+          sheets.push(createDefaultSheet());
+        }
+        saveSheets();
+        broadcast({ type: 'sheetDeleted', sheetId: message.sheetId });
+        // Also send updated sheet list
+        const sheetList = sheets.map((s) => ({ id: s.id, name: s.name }));
+        broadcast({ type: 'sheetList', sheets: sheetList });
+      }
+      break;
+    }
+
+    case 'createAttribute': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        const maxOrder = sheet.attributes.reduce((max, attr) => Math.max(max, attr.order), -1);
+        const newAttribute: Attribute = {
+          ...message.attribute,
+          id: generateId(),
+          order: maxOrder + 1,
+        } as Attribute;
+        sheet.attributes.push(newAttribute);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'updateAttribute': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        const attrIndex = sheet.attributes.findIndex((a) => a.id === message.attribute.id);
+        if (attrIndex !== -1) {
+          sheet.attributes[attrIndex] = message.attribute;
+          // Update sheet name if the 'name' attribute was changed
+          if (message.attribute.code === 'name' && message.attribute.type === 'string') {
+            sheet.name = message.attribute.value;
+          }
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+          // Also update sheet list if name changed
+          const sheetList = sheets.map((s) => ({ id: s.id, name: s.name }));
+          broadcast({ type: 'sheetList', sheets: sheetList });
+        } else {
+          send(ws, { type: 'error', message: 'Attribute not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'deleteAttribute': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        const attrIndex = sheet.attributes.findIndex((a) => a.id === message.attributeId);
+        if (attrIndex !== -1) {
+          sheet.attributes.splice(attrIndex, 1);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Attribute not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'reorderAttributes': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        // Update order based on the provided array of IDs
+        message.attributeIds.forEach((id, index) => {
+          const attr = sheet.attributes.find((a) => a.id === id);
+          if (attr) {
+            attr.order = index;
+          }
+        });
+        // Sort by order
+        sheet.attributes.sort((a, b) => a.order - b.order);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'getHistory': {
+      send(ws, { type: 'history', entries: history });
+      break;
+    }
+
+    case 'clearHistory': {
+      history = [];
+      saveHistory();
+      broadcast({ type: 'historyCleared' });
+      break;
+    }
+
+    case 'roll': {
+      // Roll handling will be implemented later
+      send(ws, { type: 'error', message: 'Rolling not yet implemented' });
+      break;
+    }
+
+    default:
+      send(ws, { type: 'error', message: 'Unknown message type' });
+  }
+}
+
 wss.on('connection', (ws) => {
   console.log('Client connected');
   clients.add(ws);
 
   ws.on('message', (data) => {
-    // For now, just log messages
-    console.log('Received:', data.toString());
-
-    // Broadcast to all clients (will implement proper message handling later)
-    // broadcast(data.toString(), ws);
+    try {
+      const message = JSON.parse(data.toString()) as ClientMessage;
+      handleMessage(ws, message);
+    } catch (err) {
+      console.error('Error parsing message:', err);
+      send(ws, { type: 'error', message: 'Invalid message format' });
+    }
   });
 
   ws.on('close', () => {
@@ -69,15 +348,6 @@ wss.on('connection', (ws) => {
     clients.delete(ws);
   });
 });
-
-// Broadcast message to all clients except sender
-function broadcast(message: string, sender?: WebSocket) {
-  clients.forEach((client) => {
-    if (client !== sender && client.readyState === WebSocket.OPEN) {
-      client.send(message);
-    }
-  });
-}
 
 // Start server
 server.listen(PORT, () => {

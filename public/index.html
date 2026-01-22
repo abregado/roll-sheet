@@ -10,12 +10,10 @@
   <div class="app-container">
     <!-- Sheet Sidebar -->
     <aside class="sheet-sidebar">
-      <div class="sheet-icons">
-        <!-- Sheet icons will be dynamically added here -->
-        <button class="sheet-icon active" data-sheet-id="1" title="Character 1">C1</button>
-        <button class="sheet-icon" data-sheet-id="2" title="Character 2">C2</button>
+      <div class="sheet-icons" id="sheet-icons">
+        <!-- Sheet icons dynamically populated -->
       </div>
-      <button class="sheet-icon add-sheet" title="Add new sheet">+</button>
+      <button class="sheet-icon add-sheet" id="add-sheet-btn" title="Add new sheet">+</button>
     </aside>
 
     <!-- Character Sheet Column -->
@@ -25,103 +23,124 @@
       <!-- Attributes Section -->
       <section class="attributes-section">
         <h2>Attributes</h2>
-        <div class="attributes-list">
-          <!-- Placeholder attributes for layout testing -->
-          <div class="attribute-item">
-            <div class="attribute-header">
-              <span class="attribute-name">Name</span>
-              <span class="attribute-code">@name</span>
-            </div>
-            <input type="text" class="attribute-value" value="Aldric" placeholder="Value">
-          </div>
-          <div class="attribute-item">
-            <div class="attribute-header">
-              <span class="attribute-name">Strength</span>
-              <span class="attribute-code">@str</span>
-            </div>
-            <input type="number" class="attribute-value" value="3" placeholder="Value">
-          </div>
-          <div class="attribute-item">
-            <div class="attribute-header">
-              <span class="attribute-name">Dexterity</span>
-              <span class="attribute-code">@dex</span>
-            </div>
-            <input type="number" class="attribute-value" value="2" placeholder="Value">
-          </div>
+        <div class="attributes-list" id="attributes-list">
+          <!-- Attributes dynamically populated -->
         </div>
-        <button class="add-attribute-btn">+ Add Attribute</button>
+        <div class="add-attribute-controls" id="add-attribute-controls">
+          <button class="add-btn" id="add-string-attr-btn" title="Add string attribute">+ String</button>
+          <button class="add-btn" id="add-integer-attr-btn" title="Add integer attribute">+ Integer</button>
+          <button class="add-btn" id="add-derived-attr-btn" title="Add derived attribute">+ Derived</button>
+        </div>
       </section>
 
       <!-- Roll Templates Section -->
       <section class="templates-section">
         <h2>Roll Templates</h2>
-        <div class="templates-list">
-          <!-- Placeholder templates for layout testing -->
-          <div class="template-item">
-            <div class="template-header">
-              <span class="template-name">Attack Roll</span>
-            </div>
-            <div class="template-formula">1d20+@str</div>
-            <div class="template-format">"{name} attacks for {result} damage"</div>
-            <button class="roll-btn">Roll</button>
-          </div>
-          <div class="template-item template-invalid">
-            <div class="template-header">
-              <span class="template-name">Magic Blast</span>
-              <span class="template-warning" title="Unknown attribute: @magic">!</span>
-            </div>
-            <div class="template-formula">2d6+@magic</div>
-            <div class="template-format">"{name} casts a spell for {result} damage"</div>
-            <button class="roll-btn" disabled>Roll</button>
-          </div>
+        <div class="templates-list" id="templates-list">
+          <!-- Templates dynamically populated -->
         </div>
-        <button class="add-template-btn">+ Add Roll Template</button>
+        <button class="add-btn add-template-btn" id="add-template-btn">+ Add Roll Template</button>
       </section>
 
-      <!-- Delete Sheet -->
-      <section class="danger-zone">
-        <button class="delete-sheet-btn">Delete Sheet</button>
+      <!-- Sheet Actions -->
+      <section class="sheet-actions">
+        <button class="secondary-btn" id="copy-sheet-btn">Copy Sheet</button>
+        <button class="danger-btn" id="delete-sheet-btn">Delete Sheet</button>
       </section>
     </main>
 
     <!-- History Column -->
     <aside class="history-panel">
       <h2>History</h2>
-      <div class="history-list">
-        <!-- Placeholder history items for layout testing -->
-        <div class="history-item">
-          <div class="history-display">Aldric attacks for 15 damage</div>
-          <div class="history-details">
-            <div class="roll-breakdown">
-              1d20+@str: [<span class="die-result">12</span>] + 3 = 15
-            </div>
-            <div class="attributes-used">
-              str: 3
-            </div>
-          </div>
-        </div>
-        <div class="history-item">
-          <div class="history-display">Aldric attacks for 8 damage</div>
-          <div class="history-details">
-            <div class="roll-breakdown">
-              1d20+@str: [<span class="die-result">5</span>] + 3 = 8
-            </div>
-            <div class="attributes-used">
-              str: 3
-            </div>
-          </div>
-        </div>
-        <div class="history-item">
-          <div class="history-display">Elara rolls 4d6 drop lowest: 14</div>
-          <div class="history-details">
-            <div class="roll-breakdown">
-              4d6dl1: [<span class="die-result">6</span>, <span class="die-result">5</span>, <span class="die-result">3</span>, <span class="die-dropped">1</span>] = 14
-            </div>
-          </div>
-        </div>
+      <div class="history-list" id="history-list">
+        <!-- History items dynamically populated -->
       </div>
-      <button class="clear-history-btn">Clear History</button>
+      <button class="secondary-btn" id="clear-history-btn">Clear History</button>
     </aside>
+  </div>
+
+  <!-- Attribute Template (View Mode) -->
+  <template id="attribute-view-template">
+    <div class="attribute-item" data-attribute-id="">
+      <div class="drag-handle" title="Drag to reorder">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="5" cy="4" r="1.5"/>
+          <circle cx="11" cy="4" r="1.5"/>
+          <circle cx="5" cy="8" r="1.5"/>
+          <circle cx="11" cy="8" r="1.5"/>
+          <circle cx="5" cy="12" r="1.5"/>
+          <circle cx="11" cy="12" r="1.5"/>
+        </svg>
+      </div>
+      <div class="attribute-content">
+        <div class="attribute-header">
+          <span class="attribute-name"></span>
+          <span class="attribute-code"></span>
+        </div>
+        <div class="attribute-value-display"></div>
+      </div>
+      <button class="edit-btn" title="Edit attribute">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 4.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zM6 8a2 2 0 114 0 2 2 0 01-4 0z"/>
+          <path d="M8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zm-7-5a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5H1.75A.75.75 0 011 8zm13 0a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 0114 8zm-9.66 3.66a.75.75 0 010-1.06l1.06-1.06a.75.75 0 111.06 1.06l-1.06 1.06a.75.75 0 01-1.06 0zm7.32-7.32a.75.75 0 010-1.06l1.06-1.06a.75.75 0 111.06 1.06l-1.06 1.06a.75.75 0 01-1.06 0zm-7.32 0a.75.75 0 01-1.06 0L2.22 3.28a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 010 1.06zm7.32 7.32a.75.75 0 01-1.06 0l-1.06-1.06a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 010 1.06z"/>
+        </svg>
+      </button>
+    </div>
+  </template>
+
+  <!-- Attribute Template (Edit Mode) -->
+  <template id="attribute-edit-template">
+    <div class="attribute-item editing" data-attribute-id="">
+      <div class="drag-handle disabled">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="5" cy="4" r="1.5"/>
+          <circle cx="11" cy="4" r="1.5"/>
+          <circle cx="5" cy="8" r="1.5"/>
+          <circle cx="11" cy="8" r="1.5"/>
+          <circle cx="5" cy="12" r="1.5"/>
+          <circle cx="11" cy="12" r="1.5"/>
+        </svg>
+      </div>
+      <div class="attribute-content">
+        <div class="attribute-edit-row">
+          <input type="text" class="edit-input edit-name" placeholder="Name" />
+          <input type="text" class="edit-input edit-code" placeholder="code" />
+        </div>
+        <div class="attribute-edit-row">
+          <input type="text" class="edit-input edit-value" placeholder="Value" />
+        </div>
+        <div class="attribute-type-badge"></div>
+      </div>
+      <div class="edit-actions">
+        <button class="save-btn" title="Save changes">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+          </svg>
+        </button>
+        <button class="cancel-btn" title="Cancel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
+          </svg>
+        </button>
+        <button class="delete-btn" title="Delete attribute">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675a.75.75 0 10-1.492.15l.66 6.6A1.75 1.75 0 005.405 15h5.19c.9 0 1.652-.681 1.741-1.576l.66-6.6a.75.75 0 00-1.492-.149l-.66 6.6a.25.25 0 01-.249.225h-5.19a.25.25 0 01-.249-.225l-.66-6.6z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="delete-modal" hidden>
+    <div class="modal">
+      <h3>Delete Sheet</h3>
+      <p>Are you sure you want to delete this character sheet? This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="secondary-btn" id="delete-cancel-btn">Cancel</button>
+        <button class="danger-btn" id="delete-confirm-btn">Delete</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
