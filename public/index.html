@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roll Sheet</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sheet Sidebar -->
+    <aside class="sheet-sidebar">
+      <div class="sheet-icons">
+        <!-- Sheet icons will be dynamically added here -->
+        <button class="sheet-icon active" data-sheet-id="1" title="Character 1">C1</button>
+        <button class="sheet-icon" data-sheet-id="2" title="Character 2">C2</button>
+      </div>
+      <button class="sheet-icon add-sheet" title="Add new sheet">+</button>
+    </aside>
+
+    <!-- Character Sheet Column -->
+    <main class="character-sheet">
+      <h1>Character Sheet</h1>
+
+      <!-- Attributes Section -->
+      <section class="attributes-section">
+        <h2>Attributes</h2>
+        <div class="attributes-list">
+          <!-- Placeholder attributes for layout testing -->
+          <div class="attribute-item">
+            <div class="attribute-header">
+              <span class="attribute-name">Name</span>
+              <span class="attribute-code">@name</span>
+            </div>
+            <input type="text" class="attribute-value" value="Aldric" placeholder="Value">
+          </div>
+          <div class="attribute-item">
+            <div class="attribute-header">
+              <span class="attribute-name">Strength</span>
+              <span class="attribute-code">@str</span>
+            </div>
+            <input type="number" class="attribute-value" value="3" placeholder="Value">
+          </div>
+          <div class="attribute-item">
+            <div class="attribute-header">
+              <span class="attribute-name">Dexterity</span>
+              <span class="attribute-code">@dex</span>
+            </div>
+            <input type="number" class="attribute-value" value="2" placeholder="Value">
+          </div>
+        </div>
+        <button class="add-attribute-btn">+ Add Attribute</button>
+      </section>
+
+      <!-- Roll Templates Section -->
+      <section class="templates-section">
+        <h2>Roll Templates</h2>
+        <div class="templates-list">
+          <!-- Placeholder templates for layout testing -->
+          <div class="template-item">
+            <div class="template-header">
+              <span class="template-name">Attack Roll</span>
+            </div>
+            <div class="template-formula">1d20+@str</div>
+            <div class="template-format">"{name} attacks for {result} damage"</div>
+            <button class="roll-btn">Roll</button>
+          </div>
+          <div class="template-item template-invalid">
+            <div class="template-header">
+              <span class="template-name">Magic Blast</span>
+              <span class="template-warning" title="Unknown attribute: @magic">!</span>
+            </div>
+            <div class="template-formula">2d6+@magic</div>
+            <div class="template-format">"{name} casts a spell for {result} damage"</div>
+            <button class="roll-btn" disabled>Roll</button>
+          </div>
+        </div>
+        <button class="add-template-btn">+ Add Roll Template</button>
+      </section>
+
+      <!-- Delete Sheet -->
+      <section class="danger-zone">
+        <button class="delete-sheet-btn">Delete Sheet</button>
+      </section>
+    </main>
+
+    <!-- History Column -->
+    <aside class="history-panel">
+      <h2>History</h2>
+      <div class="history-list">
+        <!-- Placeholder history items for layout testing -->
+        <div class="history-item">
+          <div class="history-display">Aldric attacks for 15 damage</div>
+          <div class="history-details">
+            <div class="roll-breakdown">
+              1d20+@str: [<span class="die-result">12</span>] + 3 = 15
+            </div>
+            <div class="attributes-used">
+              str: 3
+            </div>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-display">Aldric attacks for 8 damage</div>
+          <div class="history-details">
+            <div class="roll-breakdown">
+              1d20+@str: [<span class="die-result">5</span>] + 3 = 8
+            </div>
+            <div class="attributes-used">
+              str: 3
+            </div>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-display">Elara rolls 4d6 drop lowest: 14</div>
+          <div class="history-details">
+            <div class="roll-breakdown">
+              4d6dl1: [<span class="die-result">6</span>, <span class="die-result">5</span>, <span class="die-result">3</span>, <span class="die-dropped">1</span>] = 14
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="clear-history-btn">Clear History</button>
+    </aside>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

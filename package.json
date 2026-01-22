@@ -1,0 +1,20 @@
+{
+  "name": "roll-sheet",
+  "version": "1.0.0",
+  "description": "TTRPG character sheet and dice roller with real-time sync",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsc && node dist/server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.5.3"
+  },
+  "private": true
+}
