@@ -33,14 +33,28 @@ export interface HeadingAttribute extends BaseAttribute {
 
 export type Attribute = StringAttribute | IntegerAttribute | DerivedAttribute | HeadingAttribute;
 
-// Roll Template
-export interface RollTemplate {
+// Roll Template types
+export type RollTemplateType = 'roll' | 'heading';
+
+export interface BaseRollTemplate {
   id: string;
   name: string;
-  formula: string;
-  displayFormat: string;
+  type: RollTemplateType;
   order: number;
 }
+
+export interface RollTemplateRoll extends BaseRollTemplate {
+  type: 'roll';
+  formula: string;
+  displayFormat: string;
+}
+
+export interface RollTemplateHeading extends BaseRollTemplate {
+  type: 'heading';
+  collapsed: boolean;
+}
+
+export type RollTemplate = RollTemplateRoll | RollTemplateHeading;
 
 // Character Sheet
 export interface CharacterSheet {

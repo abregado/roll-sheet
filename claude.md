@@ -40,6 +40,7 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [x] Drag-and-drop reordering
   - [x] Formula validation (checks @code references exist)
   - [x] Warning icon and disabled Roll button when invalid
+  - [x] Heading dividers with collapse/expand (same as attributes)
 
 ### Not Yet Implemented
 
@@ -64,12 +65,14 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 1. **Roll Template Data Model** - Done
    - CRUD operations for roll templates in server
    - WebSocket message types: createRollTemplate, updateRollTemplate, deleteRollTemplate, reorderRollTemplates
+   - Support for both 'roll' and 'heading' types
 
 2. **Roll Template UI** - Done
    - View mode: compact single line with name, warning icon (if invalid), edit button, roll button
    - Edit mode: labeled fields for name, formula, display format
    - Same edit pattern as attributes (cog icon on hover, Enter/Escape)
    - Drag-and-drop reordering
+   - Heading dividers with collapse/expand functionality
 
 3. **Roll Template Validation** - Done
    - Parse formula to find `@code` references
@@ -154,9 +157,11 @@ Stored on the server, accessible by anyone. Each sheet contains:
   - Example: `floor((@str + @dex) / 2)`
 
 - **Roll Templates**: Predefined roll formulas
+  - Types: `roll` or `heading`
   - Name: Display label (e.g., "Attack Roll")
   - Formula: Dice notation with attribute references (e.g., `1d20+@str`)
   - Display Format: Custom output string (e.g., `"{name} attacks for {result} damage"`)
+  - Heading dividers work the same as in Attributes (collapsible sections)
 
 ### Dice Notation
 

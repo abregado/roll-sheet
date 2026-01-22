@@ -306,11 +306,11 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
         const maxOrder = sheet.rollTemplates.reduce((max, t) => Math.max(max, t.order), -1);
-        const newTemplate: RollTemplate = {
+        const newTemplate = {
           ...message.template,
           id: generateId(),
           order: maxOrder + 1,
-        };
+        } as RollTemplate;
         sheet.rollTemplates.push(newTemplate);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });

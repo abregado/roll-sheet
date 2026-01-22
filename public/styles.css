@@ -526,6 +526,99 @@ input {
   opacity: 1;
 }
 
+/* Template Heading Items */
+.template-heading-item {
+  background-color: transparent;
+  padding: 0.75rem 0.5rem 0.25rem 0.5rem;
+  margin-top: 0.5rem;
+  border-bottom: 1px solid #3a3a5a;
+  border-radius: 0;
+  grid-template-columns: auto auto 1fr auto;
+}
+
+.template-heading-item:first-child {
+  margin-top: 0;
+}
+
+.template-heading-item:hover {
+  background-color: transparent;
+}
+
+.template-heading-item.editing {
+  background-color: #2a2a4a;
+  border-radius: 6px;
+  border: 1px solid #6366f1;
+  border-bottom: 1px solid #6366f1;
+  padding: 0.5rem 0.75rem;
+}
+
+.template-heading-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.edit-template-heading-name {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  background-color: #1a1a2e;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.edit-template-heading-name:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.template-heading-item .collapse-btn {
+  background: none;
+  border: none;
+  color: #666;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: color 0.2s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.template-heading-item .collapse-btn:hover {
+  color: #fff;
+}
+
+.template-heading-item .collapse-btn .collapse-icon {
+  transition: transform 0.2s ease;
+}
+
+.template-heading-item.collapsed .collapse-btn .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+/* Indented templates (under headings) */
+.template-item.indented {
+  margin-left: 1.5rem;
+}
+
+.template-item.indented.collapsed {
+  display: none;
+}
+
+/* Add template controls */
+.add-template-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.add-template-controls .add-btn {
+  flex: 1;
+}
+
 .roll-btn {
   padding: 0.5rem 1rem;
   background-color: #6366f1;

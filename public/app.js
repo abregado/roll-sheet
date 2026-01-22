@@ -13,6 +13,7 @@
   let draggedAttributeId = null;
   let draggedTemplateId = null;
   let collapsedHeadings = new Set(); // Track collapsed headings locally
+  let collapsedTemplateHeadings = new Set(); // Track collapsed template headings locally
 
   // DOM Elements
   const elements = {
@@ -25,6 +26,7 @@
     addDerivedAttrBtn: document.getElementById('add-derived-attr-btn'),
     templatesList: document.getElementById('templates-list'),
     addTemplateBtn: document.getElementById('add-template-btn'),
+    addTemplateHeadingBtn: document.getElementById('add-template-heading-btn'),
     copySheetBtn: document.getElementById('copy-sheet-btn'),
     deleteSheetBtn: document.getElementById('delete-sheet-btn'),
     historyList: document.getElementById('history-list'),
@@ -42,6 +44,8 @@
     headingEdit: document.getElementById('heading-edit-template'),
     templateView: document.getElementById('template-view-template'),
     templateEdit: document.getElementById('template-edit-template'),
+    templateHeadingView: document.getElementById('template-heading-view-template'),
+    templateHeadingEdit: document.getElementById('template-heading-edit-template'),
   };
 
   // ============================================================
@@ -787,19 +791,37 @@
     // Sort by order
     const sortedTemplates = [...currentSheet.rollTemplates].sort((a, b) => a.order - b.order);
 
+    // Track current heading for indentation
+    let currentHeadingId = null;
+
     sortedTemplates.forEach(template => {
-      const el = createTemplateElement(template);
-      elements.templatesList.appendChild(el);
+      if (template.type === 'heading') {
+        currentHeadingId = template.id;
+        const el = createTemplateHeadingElement(template);
+        elements.templatesList.appendChild(el);
+      } else {
+        const el = createTemplateElement(template, currentHeadingId);
+        elements.templatesList.appendChild(el);
+      }
     });
   }
 
-  function createTemplateElement(template) {
+  function createTemplateElement(template, headingId) {
     const isEditing = editingTemplateId === template.id;
     const htmlTemplate = isEditing ? templates.templateEdit : templates.templateView;
     const clone = htmlTemplate.content.cloneNode(true);
     const el = clone.querySelector('.template-item');
 
     el.dataset.templateId = template.id;
+
+    // Add indentation if under a heading
+    if (headingId) {
+      el.classList.add('indented');
+      el.dataset.headingId = headingId;
+      if (collapsedTemplateHeadings.has(headingId)) {
+        el.classList.add('collapsed');
+      }
+    }
 
     // Validate formula
     const validation = validateRollFormula(template.formula);
@@ -816,6 +838,97 @@
     }
 
     return el;
+  }
+
+  function createTemplateHeadingElement(template) {
+    const isEditing = editingTemplateId === template.id;
+    const htmlTemplate = isEditing ? templates.templateHeadingEdit : templates.templateHeadingView;
+    const clone = htmlTemplate.content.cloneNode(true);
+    const el = clone.querySelector('.template-item');
+
+    el.dataset.templateId = template.id;
+
+    if (collapsedTemplateHeadings.has(template.id)) {
+      el.classList.add('collapsed');
+    }
+
+    if (isEditing) {
+      setupTemplateHeadingEditMode(el, template);
+    } else {
+      setupTemplateHeadingViewMode(el, template);
+    }
+
+    // Setup drag and drop (only in view mode)
+    if (!isEditing) {
+      setupTemplateDragAndDrop(el, template.id);
+    }
+
+    return el;
+  }
+
+  function setupTemplateHeadingViewMode(el, template) {
+    const nameEl = el.querySelector('.template-heading-name');
+    const editBtn = el.querySelector('.edit-btn');
+    const collapseBtn = el.querySelector('.collapse-btn');
+
+    nameEl.textContent = template.name;
+
+    editBtn.addEventListener('click', () => enterTemplateEditMode(template.id));
+    collapseBtn.addEventListener('click', () => toggleTemplateHeadingCollapse(template.id));
+  }
+
+  function setupTemplateHeadingEditMode(el, template) {
+    const nameInput = el.querySelector('.edit-template-heading-name');
+    const saveBtn = el.querySelector('.save-btn');
+    const cancelBtn = el.querySelector('.cancel-btn');
+    const deleteBtn = el.querySelector('.delete-btn');
+
+    nameInput.value = template.name;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveTemplateHeading(template.id, nameInput.value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        exitTemplateEditMode();
+      }
+    };
+
+    nameInput.addEventListener('keydown', handleKeyDown);
+
+    saveBtn.addEventListener('click', () => saveTemplateHeading(template.id, nameInput.value));
+    cancelBtn.addEventListener('click', () => exitTemplateEditMode());
+    deleteBtn.addEventListener('click', () => deleteTemplate(template.id));
+
+    setTimeout(() => nameInput.focus(), 0);
+  }
+
+  function saveTemplateHeading(id, name) {
+    if (!name.trim()) {
+      alert('Name is required');
+      return;
+    }
+
+    const template = currentSheet.rollTemplates.find(t => t.id === id);
+    if (!template) return;
+
+    const updatedTemplate = {
+      ...template,
+      name: name.trim(),
+    };
+
+    send({ type: 'updateRollTemplate', sheetId: currentSheetId, template: updatedTemplate });
+    exitTemplateEditMode();
+  }
+
+  function toggleTemplateHeadingCollapse(headingId) {
+    if (collapsedTemplateHeadings.has(headingId)) {
+      collapsedTemplateHeadings.delete(headingId);
+    } else {
+      collapsedTemplateHeadings.add(headingId);
+    }
+    renderTemplates();
   }
 
   function setupTemplateViewMode(el, template, validation) {
@@ -953,9 +1066,28 @@
     }
 
     const template = {
+      type: 'roll',
       name,
       formula: '1d20',
       displayFormat: '{name} rolled {result}',
+    };
+
+    send({ type: 'createRollTemplate', sheetId: currentSheetId, template });
+  }
+
+  function addTemplateHeading() {
+    let name = 'New Section';
+    let counter = 1;
+
+    while (currentSheet.rollTemplates.some(t => t.type === 'heading' && t.name === name)) {
+      counter++;
+      name = 'New Section ' + counter;
+    }
+
+    const template = {
+      type: 'heading',
+      name,
+      collapsed: false,
     };
 
     send({ type: 'createRollTemplate', sheetId: currentSheetId, template });
@@ -966,6 +1098,11 @@
   // ============================================================
 
   function validateRollFormula(formula) {
+    if (formula === undefined) {
+      // Headings don't have formulas
+      return { valid: true };
+    }
+
     if (!formula || !formula.trim()) {
       return { valid: false, error: 'Formula is required' };
     }
@@ -1034,7 +1171,7 @@
 
     draggedEl.classList.add('dragging');
 
-    const items = Array.from(elements.templatesList.querySelectorAll('.template-item'));
+    const items = Array.from(elements.templatesList.querySelectorAll('.template-item:not(.collapsed)'));
     const draggedIndex = items.indexOf(draggedEl);
     const itemHeight = draggedEl.offsetHeight + 8; // Including gap
 
@@ -1194,6 +1331,7 @@
     elements.addIntegerAttrBtn.addEventListener('click', () => addAttribute('integer'));
     elements.addDerivedAttrBtn.addEventListener('click', () => addAttribute('derived'));
     elements.addTemplateBtn.addEventListener('click', addRollTemplate);
+    elements.addTemplateHeadingBtn.addEventListener('click', addTemplateHeading);
 
     elements.deleteModal.addEventListener('click', (e) => {
       if (e.target === elements.deleteModal) {
