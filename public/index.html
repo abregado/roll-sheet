@@ -78,6 +78,7 @@
       </div>
       <span class="attribute-name"></span>
       <span class="attribute-value-display"></span>
+      <span class="attribute-warning" title="" hidden>!</span>
       <span class="attribute-code"></span>
       <button class="edit-btn" title="Edit attribute">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -170,8 +171,9 @@
         </div>
         <div class="attribute-edit-row">
           <input type="text" class="edit-input edit-value" placeholder="Value" />
+          <div class="attribute-type-badge"></div>
         </div>
-        <div class="attribute-type-badge"></div>
+        <div class="attribute-validation-error" hidden></div>
       </div>
       <div class="edit-actions">
         <button class="save-btn" title="Save changes">

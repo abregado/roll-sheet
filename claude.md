@@ -29,7 +29,9 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [x] Drag-and-drop reordering
   - [x] Code validation (lowercase alpha + underscore, unique)
   - [x] Indentation for attributes under headings
-  - [x] Warning display for invalid derived formulas
+  - [x] Warning icon for invalid derived formulas (view mode)
+  - [x] Live formula validation in edit mode
+  - [x] Letter-based auto-naming (text_a, text_b, ... text_z, text_aa, etc.)
 - [x] History panel UI (placeholder, shows "No rolls yet")
 - [x] Clear history button
 - [x] **Roll Templates UI**

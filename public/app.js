@@ -331,6 +331,7 @@
     const nameEl = el.querySelector('.attribute-name');
     const codeEl = el.querySelector('.attribute-code');
     const valueEl = el.querySelector('.attribute-value-display');
+    const warningEl = el.querySelector('.attribute-warning');
     const editBtn = el.querySelector('.edit-btn');
 
     nameEl.textContent = attr.name;
@@ -340,15 +341,19 @@
     if (attr.type === 'derived') {
       const result = evaluateFormula(attr.formula);
       if (result.error) {
-        valueEl.textContent = result.error;
-        valueEl.classList.add('error');
+        valueEl.textContent = '—';
+        valueEl.classList.add('derived');
+        warningEl.hidden = false;
+        warningEl.title = result.error;
         el.classList.add('has-warning');
       } else {
         valueEl.textContent = result.value;
         valueEl.classList.add('derived');
+        warningEl.hidden = true;
       }
     } else {
       valueEl.textContent = attr.value;
+      warningEl.hidden = true;
     }
 
     editBtn.addEventListener('click', () => enterEditMode(attr.id));
@@ -370,6 +375,7 @@
     const codeInput = el.querySelector('.edit-code');
     const valueInput = el.querySelector('.edit-value');
     const typeBadge = el.querySelector('.attribute-type-badge');
+    const errorEl = el.querySelector('.attribute-validation-error');
     const saveBtn = el.querySelector('.save-btn');
     const cancelBtn = el.querySelector('.cancel-btn');
     const deleteBtn = el.querySelector('.delete-btn');
@@ -380,6 +386,25 @@
     if (attr.type === 'derived') {
       valueInput.value = attr.formula;
       valueInput.placeholder = 'Formula (e.g., @str + @dex)';
+
+      // Live validation for derived formulas
+      const validateDerivedFormula = () => {
+        const result = evaluateFormula(valueInput.value);
+        if (result.error) {
+          valueInput.classList.add('invalid');
+          errorEl.textContent = result.error;
+          errorEl.hidden = false;
+        } else {
+          valueInput.classList.remove('invalid');
+          errorEl.hidden = true;
+        }
+      };
+
+      // Initial validation
+      validateDerivedFormula();
+
+      // Validate on input
+      valueInput.addEventListener('input', validateDerivedFormula);
     } else {
       valueInput.value = attr.value;
       valueInput.placeholder = attr.type === 'integer' ? 'Number' : 'Text';
@@ -547,6 +572,21 @@
   // Add Attribute
   // ============================================================
 
+  // Generate letter suffix: a, b, c, ... z, aa, ab, ... az, ba, ... zz
+  function generateLetterSuffix(index) {
+    if (index < 26) {
+      return String.fromCharCode(97 + index); // a-z
+    }
+    // For indices >= 26, use two letters (aa, ab, ... zz)
+    const first = Math.floor((index - 26) / 26);
+    const second = (index - 26) % 26;
+    if (first >= 26) {
+      // Fallback for very large indices
+      return 'z' + (index - 26 * 27 + 1);
+    }
+    return String.fromCharCode(97 + first) + String.fromCharCode(97 + second);
+  }
+
   function addAttribute(type) {
     if (type === 'heading') {
       addHeading();
@@ -558,12 +598,16 @@
 
     let name = baseName;
     let code = baseCode;
-    let counter = 1;
 
-    while (currentSheet.attributes.some(a => a.code === code)) {
-      counter++;
-      code = baseCode + '_' + counter;
-      name = baseName + ' ' + counter;
+    // If base code exists, try suffixes: _a, _b, ... _z, _aa, _ab, ...
+    if (currentSheet.attributes.some(a => a.code === code)) {
+      let suffixIndex = 0;
+      do {
+        const suffix = generateLetterSuffix(suffixIndex);
+        code = baseCode + '_' + suffix;
+        name = baseName + ' ' + suffix.toUpperCase();
+        suffixIndex++;
+      } while (currentSheet.attributes.some(a => a.code === code));
     }
 
     const attribute = {
