@@ -214,7 +214,17 @@
           <path d="M8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zm-7-5a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5H1.75A.75.75 0 011 8zm13 0a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 0114 8zm-9.66 3.66a.75.75 0 010-1.06l1.06-1.06a.75.75 0 111.06 1.06l-1.06 1.06a.75.75 0 01-1.06 0zm7.32-7.32a.75.75 0 010-1.06l1.06-1.06a.75.75 0 111.06 1.06l-1.06 1.06a.75.75 0 01-1.06 0zm-7.32 0a.75.75 0 01-1.06 0L2.22 3.28a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 010 1.06zm7.32 7.32a.75.75 0 01-1.06 0l-1.06-1.06a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 010 1.06z"/>
         </svg>
       </button>
-      <button class="roll-btn">Roll</button>
+      <div class="roll-btn-group">
+        <button class="roll-btn">Roll</button>
+        <button class="roll-dropdown-btn" hidden>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>
+          </svg>
+        </button>
+        <div class="roll-dropdown" hidden>
+          <!-- Dropdown items populated dynamically -->
+        </div>
+      </div>
     </div>
   </template>
 
@@ -236,10 +246,10 @@
           <label>Name</label>
           <input type="text" class="edit-input edit-template-name" placeholder="e.g., Attack Roll" />
         </div>
-        <div class="template-edit-row">
-          <label>Formula</label>
-          <input type="text" class="edit-input edit-template-formula" placeholder="e.g., 1d20+@str" />
+        <div class="template-formulas-list">
+          <!-- Formula rows populated dynamically -->
         </div>
+        <button class="add-formula-btn" type="button">+ Add Formula Variant</button>
         <div class="template-edit-row">
           <label>Display</label>
           <input type="text" class="edit-input edit-template-format" placeholder='e.g., "{name} attacks for {result}"' />
@@ -263,6 +273,19 @@
           </svg>
         </button>
       </div>
+    </div>
+  </template>
+
+  <!-- Formula Row Template (for edit mode) -->
+  <template id="formula-row-template">
+    <div class="formula-row" data-formula-index="">
+      <input type="text" class="edit-input edit-formula-title" placeholder="e.g., Normal, With Advantage" />
+      <input type="text" class="edit-input edit-formula-formula" placeholder="e.g., 1d20+@str" />
+      <button class="remove-formula-btn" title="Remove formula" type="button">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
+        </svg>
+      </button>
     </div>
   </template>
 

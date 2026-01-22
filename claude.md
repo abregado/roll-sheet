@@ -35,12 +35,13 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 - [x] **Roll Templates UI**
   - [x] Create/edit/delete roll templates
   - [x] Compact single-line view mode (Name | Roll button)
-  - [x] Edit mode with name, formula, display format fields
+  - [x] Edit mode with name and multiple formula variants
   - [x] Same edit pattern as attributes (cog icon on hover, Enter/Escape)
   - [x] Drag-and-drop reordering
   - [x] Formula validation (checks @code references exist)
   - [x] Warning icon and disabled Roll button when invalid
   - [x] Heading dividers with collapse/expand (same as attributes)
+  - [x] Multiple formula variants per template (split button dropdown)
 
 ### Not Yet Implemented
 
@@ -66,18 +67,20 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
    - CRUD operations for roll templates in server
    - WebSocket message types: createRollTemplate, updateRollTemplate, deleteRollTemplate, reorderRollTemplates
    - Support for both 'roll' and 'heading' types
+   - Multiple formula variants per template (formulas array with title, formula, displayFormat)
 
 2. **Roll Template UI** - Done
    - View mode: compact single line with name, warning icon (if invalid), edit button, roll button
-   - Edit mode: labeled fields for name, formula, display format
+   - Split-button dropdown when template has multiple formula variants
+   - Edit mode: name field plus dynamic list of formula rows (add/remove variants)
    - Same edit pattern as attributes (cog icon on hover, Enter/Escape)
    - Drag-and-drop reordering
    - Heading dividers with collapse/expand functionality
 
 3. **Roll Template Validation** - Done
-   - Parse formula to find `@code` references
+   - Parse all formulas to find `@code` references
    - Check all codes exist in sheet's attributes (not headings or strings)
-   - Show warning icon and disable roll button if invalid
+   - Show warning icon and disable roll button if any formula is invalid
 
 ### Phase 2: Dice Rolling Engine (Next)
 
@@ -159,8 +162,12 @@ Stored on the server, accessible by anyone. Each sheet contains:
 - **Roll Templates**: Predefined roll formulas
   - Types: `roll` or `heading`
   - Name: Display label (e.g., "Attack Roll")
-  - Formula: Dice notation with attribute references (e.g., `1d20+@str`)
   - Display Format: Custom output string (e.g., `"{name} attacks for {result} damage"`)
+  - Formulas: Array of formula variants, each with:
+    - Title: Label for the variant (e.g., "Normal", "With Advantage")
+    - Formula: Dice notation with attribute references (e.g., `1d20+@str`)
+  - Multiple formulas enable split-button dropdown (e.g., advantage/disadvantage, finesse weapons)
+  - All formula variants share the same display format
   - Heading dividers work the same as in Attributes (collapsible sections)
 
 ### Dice Notation

@@ -46,6 +46,7 @@
     templateEdit: document.getElementById('template-edit-template'),
     templateHeadingView: document.getElementById('template-heading-view-template'),
     templateHeadingEdit: document.getElementById('template-heading-edit-template'),
+    formulaRow: document.getElementById('formula-row-template'),
   };
 
   // ============================================================
@@ -823,8 +824,8 @@
       }
     }
 
-    // Validate formula
-    const validation = validateRollFormula(template.formula);
+    // Validate all formulas
+    const validation = validateRollTemplate(template);
 
     if (isEditing) {
       setupTemplateEditMode(el, template, validation);
@@ -935,27 +936,66 @@
     const nameEl = el.querySelector('.template-name');
     const warningEl = el.querySelector('.template-warning');
     const editBtn = el.querySelector('.edit-btn');
+    const rollBtnGroup = el.querySelector('.roll-btn-group');
     const rollBtn = el.querySelector('.roll-btn');
+    const dropdownBtn = el.querySelector('.roll-dropdown-btn');
+    const dropdown = el.querySelector('.roll-dropdown');
 
     nameEl.textContent = template.name;
+
+    const hasMultipleFormulas = template.formulas && template.formulas.length > 1;
 
     if (!validation.valid) {
       el.classList.add('template-invalid');
       warningEl.hidden = false;
-      warningEl.title = validation.error;
+      warningEl.title = validation.errors.join(', ');
       rollBtn.disabled = true;
+      if (dropdownBtn) dropdownBtn.disabled = true;
     } else {
       warningEl.hidden = true;
       rollBtn.disabled = false;
     }
 
+    // Setup split button if multiple formulas
+    if (hasMultipleFormulas) {
+      dropdownBtn.hidden = false;
+
+      // Populate dropdown with other formulas (skip first one)
+      template.formulas.slice(1).forEach((formula, idx) => {
+        const item = document.createElement('button');
+        item.className = 'roll-dropdown-item';
+        item.textContent = formula.title || `Option ${idx + 2}`;
+        item.disabled = !validation.valid;
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dropdown.hidden = true;
+          executeRoll(template.id, idx + 1);
+        });
+        dropdown.appendChild(item);
+      });
+
+      // Toggle dropdown on click
+      dropdownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.hidden = !dropdown.hidden;
+      });
+
+      // Close dropdown when clicking elsewhere
+      document.addEventListener('click', () => {
+        dropdown.hidden = true;
+      });
+    } else {
+      rollBtnGroup.classList.add('single');
+    }
+
     editBtn.addEventListener('click', () => enterTemplateEditMode(template.id));
-    rollBtn.addEventListener('click', () => executeRoll(template.id));
+    rollBtn.addEventListener('click', () => executeRoll(template.id, 0));
   }
 
   function setupTemplateEditMode(el, template, validation) {
     const nameInput = el.querySelector('.edit-template-name');
-    const formulaInput = el.querySelector('.edit-template-formula');
+    const formulasList = el.querySelector('.template-formulas-list');
+    const addFormulaBtn = el.querySelector('.add-formula-btn');
     const formatInput = el.querySelector('.edit-template-format');
     const errorEl = el.querySelector('.template-validation-error');
     const saveBtn = el.querySelector('.save-btn');
@@ -963,48 +1003,112 @@
     const deleteBtn = el.querySelector('.delete-btn');
 
     nameInput.value = template.name;
-    formulaInput.value = template.formula;
-    formatInput.value = template.displayFormat;
+    formatInput.value = template.displayFormat || '';
 
-    if (!validation.valid) {
-      errorEl.textContent = validation.error;
-      errorEl.hidden = false;
+    // Track formulas in edit state
+    let editFormulas = template.formulas ? [...template.formulas] : [{ title: '', formula: '1d20' }];
+
+    function renderFormulaRows() {
+      formulasList.innerHTML = '';
+      editFormulas.forEach((formula, index) => {
+        const row = createFormulaRow(formula, index, editFormulas.length > 1);
+        formulasList.appendChild(row);
+      });
+      updateValidation();
     }
 
-    // Live validation on formula input
-    formulaInput.addEventListener('input', () => {
-      const newValidation = validateRollFormula(formulaInput.value);
-      if (!newValidation.valid) {
-        formulaInput.classList.add('invalid');
-        errorEl.textContent = newValidation.error;
+    function createFormulaRow(formula, index, canRemove) {
+      const clone = templates.formulaRow.content.cloneNode(true);
+      const row = clone.querySelector('.formula-row');
+      const titleInput = row.querySelector('.edit-formula-title');
+      const formulaInput = row.querySelector('.edit-formula-formula');
+      const removeBtn = row.querySelector('.remove-formula-btn');
+
+      row.dataset.formulaIndex = index;
+      titleInput.value = formula.title || '';
+      formulaInput.value = formula.formula || '';
+
+      // Update edit state on input
+      titleInput.addEventListener('input', () => {
+        editFormulas[index].title = titleInput.value;
+      });
+      formulaInput.addEventListener('input', () => {
+        editFormulas[index].formula = formulaInput.value;
+        updateValidation();
+      });
+
+      // Handle Enter/Escape
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          exitTemplateEditMode();
+        }
+      };
+      titleInput.addEventListener('keydown', handleKeyDown);
+      formulaInput.addEventListener('keydown', handleKeyDown);
+
+      // Remove button
+      if (canRemove) {
+        removeBtn.addEventListener('click', () => {
+          editFormulas.splice(index, 1);
+          renderFormulaRows();
+        });
+      } else {
+        removeBtn.hidden = true;
+      }
+
+      return row;
+    }
+
+    function updateValidation() {
+      const allValidation = validateAllFormulas(editFormulas);
+      if (!allValidation.valid) {
+        errorEl.textContent = allValidation.errors.join('; ');
         errorEl.hidden = false;
       } else {
-        formulaInput.classList.remove('invalid');
         errorEl.hidden = true;
       }
+
+      // Mark invalid formula inputs
+      const rows = formulasList.querySelectorAll('.formula-row');
+      rows.forEach((row, idx) => {
+        const formulaInput = row.querySelector('.edit-formula-formula');
+        const singleValidation = validateSingleFormula(editFormulas[idx]?.formula);
+        formulaInput.classList.toggle('invalid', !singleValidation.valid);
+      });
+    }
+
+    // Add formula button
+    addFormulaBtn.addEventListener('click', () => {
+      editFormulas.push({ title: '', formula: '1d20' });
+      renderFormulaRows();
     });
 
-    // Save on Enter
-    const handleKeyDown = (e) => {
+    // Handle Enter/Escape on name and format inputs
+    const handleMainKeyDown = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        saveTemplate(template.id, nameInput.value, formulaInput.value, formatInput.value);
+        saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         exitTemplateEditMode();
       }
     };
-
-    nameInput.addEventListener('keydown', handleKeyDown);
-    formulaInput.addEventListener('keydown', handleKeyDown);
-    formatInput.addEventListener('keydown', handleKeyDown);
+    nameInput.addEventListener('keydown', handleMainKeyDown);
+    formatInput.addEventListener('keydown', handleMainKeyDown);
 
     saveBtn.addEventListener('click', () => {
-      saveTemplate(template.id, nameInput.value, formulaInput.value, formatInput.value);
+      saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value);
     });
 
     cancelBtn.addEventListener('click', () => exitTemplateEditMode());
     deleteBtn.addEventListener('click', () => deleteTemplate(template.id));
+
+    // Initial render
+    renderFormulaRows();
 
     // Focus the name input
     setTimeout(() => nameInput.focus(), 0);
@@ -1024,14 +1128,20 @@
     renderTemplates();
   }
 
-  function saveTemplate(id, name, formula, displayFormat) {
+  function saveTemplateWithFormulas(id, name, formulas, displayFormat) {
     if (!name.trim()) {
       alert('Name is required');
       return;
     }
 
-    if (!formula.trim()) {
-      alert('Formula is required');
+    // Validate all formulas have content
+    const cleanedFormulas = formulas.map(f => ({
+      title: (f.title || '').trim(),
+      formula: (f.formula || '').trim(),
+    })).filter(f => f.formula); // Remove empty formulas
+
+    if (cleanedFormulas.length === 0) {
+      alert('At least one formula is required');
       return;
     }
 
@@ -1041,8 +1151,8 @@
     const updatedTemplate = {
       ...template,
       name: name.trim(),
-      formula: formula.trim(),
-      displayFormat: displayFormat.trim(),
+      formulas: cleanedFormulas,
+      displayFormat: (displayFormat || '').trim(),
     };
 
     send({ type: 'updateRollTemplate', sheetId: currentSheetId, template: updatedTemplate });
@@ -1068,7 +1178,9 @@
     const template = {
       type: 'roll',
       name,
-      formula: '1d20',
+      formulas: [
+        { title: '', formula: '1d20' }
+      ],
       displayFormat: '{name} rolled {result}',
     };
 
@@ -1097,12 +1209,7 @@
   // Roll Template Validation
   // ============================================================
 
-  function validateRollFormula(formula) {
-    if (formula === undefined) {
-      // Headings don't have formulas
-      return { valid: true };
-    }
-
+  function validateSingleFormula(formula) {
     if (!formula || !formula.trim()) {
       return { valid: false, error: 'Formula is required' };
     }
@@ -1130,6 +1237,34 @@
     }
 
     return { valid: true };
+  }
+
+  function validateAllFormulas(formulas) {
+    if (!formulas || formulas.length === 0) {
+      return { valid: false, errors: ['At least one formula is required'] };
+    }
+
+    const errors = [];
+    formulas.forEach((f, idx) => {
+      const validation = validateSingleFormula(f.formula);
+      if (!validation.valid) {
+        const label = f.title || `Formula ${idx + 1}`;
+        errors.push(`${label}: ${validation.error}`);
+      }
+    });
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  }
+
+  function validateRollTemplate(template) {
+    if (!template.formulas) {
+      // Headings don't have formulas
+      return { valid: true, errors: [] };
+    }
+    return validateAllFormulas(template.formulas);
   }
 
   // ============================================================
@@ -1233,8 +1368,8 @@
   // Roll Execution (placeholder - to be implemented in Phase 2)
   // ============================================================
 
-  function executeRoll(templateId) {
-    send({ type: 'roll', sheetId: currentSheetId, templateId });
+  function executeRoll(templateId, formulaIndex = 0) {
+    send({ type: 'roll', sheetId: currentSheetId, templateId, formulaIndex });
   }
 
   // ============================================================

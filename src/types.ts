@@ -36,6 +36,11 @@ export type Attribute = StringAttribute | IntegerAttribute | DerivedAttribute | 
 // Roll Template types
 export type RollTemplateType = 'roll' | 'heading';
 
+export interface RollFormula {
+  title: string;
+  formula: string;
+}
+
 export interface BaseRollTemplate {
   id: string;
   name: string;
@@ -45,7 +50,7 @@ export interface BaseRollTemplate {
 
 export interface RollTemplateRoll extends BaseRollTemplate {
   type: 'roll';
-  formula: string;
+  formulas: RollFormula[];
   displayFormat: string;
 }
 
@@ -107,7 +112,7 @@ export type ClientMessage =
   | { type: 'reorderRollTemplates'; sheetId: string; templateIds: string[] }
   | { type: 'getHistory' }
   | { type: 'clearHistory' }
-  | { type: 'roll'; sheetId: string; templateId: string };
+  | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number };
 
 export type ServerMessage =
   | { type: 'sheetList'; sheets: { id: string; name: string }[] }

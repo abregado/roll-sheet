@@ -56,6 +56,14 @@
         "value": 0,
         "id": "mkpfa57p2wzt2ubch",
         "order": 6
+      },
+      {
+        "name": "Computed 2",
+        "code": "calc_",
+        "type": "derived",
+        "formula": "5+@cheese",
+        "id": "mkpoifg35ww5fcenl",
+        "order": 7
       }
     ],
     "rollTemplates": [
@@ -67,11 +75,25 @@
         "order": 0
       },
       {
-        "name": "New Roll",
+        "name": "Attack",
         "formula": "1d20+1",
         "displayFormat": "{name} rolled {result}",
         "id": "mkpn905mz0cl8g6kz",
-        "order": 1
+        "order": 1,
+        "formulas": [
+          {
+            "title": "",
+            "formula": "1d20"
+          },
+          {
+            "title": "Cheesy",
+            "formula": "1d20+2"
+          },
+          {
+            "title": "PlusNum",
+            "formula": "1d20+@num"
+          }
+        ]
       },
       {
         "name": "New Roll 2",
@@ -93,7 +115,14 @@
         "formula": "1d20",
         "displayFormat": "{name} rolled {result}",
         "id": "mkpnzpwgtm7e96f6j",
-        "order": 4
+        "order": 4,
+        "formulas": [
+          {
+            "title": "",
+            "formula": "1d20+@num",
+            "displayFormat": ""
+          }
+        ]
       }
     ]
   }
