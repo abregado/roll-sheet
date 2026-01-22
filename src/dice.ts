@@ -430,13 +430,13 @@ export function executeRoll(
   const { diceResults, total, expandedFormula } = evaluateFormula(tokens, attributeMap);
 
   // Build attributes used list
-  const attributesUsed: { code: string; value: number | string }[] = [];
+  const attributesUsed: { code: string; name: string; value: number | string }[] = [];
   for (const ref of attributeRefs) {
     const attr = sheet.attributes.find((a) => 'code' in a && a.code === ref);
     if (attr && 'value' in attr) {
-      attributesUsed.push({ code: ref, value: attr.value });
+      attributesUsed.push({ code: ref, name: attr.name, value: attr.value });
     } else if (attr && 'formula' in attr) {
-      attributesUsed.push({ code: ref, value: attributeMap.get(ref) ?? 0 });
+      attributesUsed.push({ code: ref, name: attr.name, value: attributeMap.get(ref) ?? 0 });
     }
   }
 

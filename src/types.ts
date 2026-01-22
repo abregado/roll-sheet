@@ -84,7 +84,7 @@ export interface RollDetails {
   formula: string;
   expandedFormula: string;
   diceResults: DiceResult[];
-  attributesUsed: { code: string; value: number | string }[];
+  attributesUsed: { code: string; name: string; value: number | string }[];
   total: number;
 }
 

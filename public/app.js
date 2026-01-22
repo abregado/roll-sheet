@@ -1447,17 +1447,42 @@
     const el = document.createElement('div');
     el.className = 'history-item';
 
+    const hasDetails = entry.details.diceResults.length > 0 || entry.details.attributesUsed.length > 0;
+
     el.innerHTML = `
-      <div class="history-display">${escapeHtml(entry.displayText)}</div>
-      <div class="history-details">
-        <div class="roll-breakdown">${formatRollBreakdown(entry.details)}</div>
-        ${entry.details.attributesUsed.length > 0 ? `
-          <div class="attributes-used">
-            ${entry.details.attributesUsed.map(a => `${a.code}: ${a.value}`).join(', ')}
-          </div>
+      <div class="history-header">
+        <div class="history-display">${escapeHtml(entry.displayText)}</div>
+        ${hasDetails ? `
+          <button class="history-toggle" aria-expanded="false" aria-label="Show details">
+            <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
         ` : ''}
       </div>
+      ${hasDetails ? `
+        <div class="history-details" hidden>
+          <div class="roll-breakdown">${formatRollBreakdown(entry.details)}</div>
+          ${entry.details.attributesUsed.length > 0 ? `
+            <div class="attributes-used">
+              ${entry.details.attributesUsed.map(a => `<span class="attr-name">${escapeHtml(a.name || a.code)}</span>: ${a.value}`).join(', ')}
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
     `;
+
+    // Add toggle functionality
+    const toggleBtn = el.querySelector('.history-toggle');
+    const details = el.querySelector('.history-details');
+    if (toggleBtn && details) {
+      toggleBtn.addEventListener('click', () => {
+        const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+        toggleBtn.setAttribute('aria-expanded', !expanded);
+        details.hidden = expanded;
+        el.classList.toggle('expanded', !expanded);
+      });
+    }
 
     return el;
   }
