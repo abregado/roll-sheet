@@ -1,30 +1,37 @@
 // Attribute types
-export type AttributeType = 'string' | 'integer' | 'derived';
+export type AttributeType = 'string' | 'integer' | 'derived' | 'heading';
 
 export interface BaseAttribute {
   id: string;
   name: string;
-  code: string;
   type: AttributeType;
   order: number;
 }
 
 export interface StringAttribute extends BaseAttribute {
   type: 'string';
+  code: string;
   value: string;
 }
 
 export interface IntegerAttribute extends BaseAttribute {
   type: 'integer';
+  code: string;
   value: number;
 }
 
 export interface DerivedAttribute extends BaseAttribute {
   type: 'derived';
+  code: string;
   formula: string;
 }
 
-export type Attribute = StringAttribute | IntegerAttribute | DerivedAttribute;
+export interface HeadingAttribute extends BaseAttribute {
+  type: 'heading';
+  collapsed: boolean;
+}
+
+export type Attribute = StringAttribute | IntegerAttribute | DerivedAttribute | HeadingAttribute;
 
 // Roll Template
 export interface RollTemplate {
@@ -80,6 +87,10 @@ export type ClientMessage =
   | { type: 'updateAttribute'; sheetId: string; attribute: Attribute }
   | { type: 'deleteAttribute'; sheetId: string; attributeId: string }
   | { type: 'reorderAttributes'; sheetId: string; attributeIds: string[] }
+  | { type: 'createRollTemplate'; sheetId: string; template: Omit<RollTemplate, 'id' | 'order'> }
+  | { type: 'updateRollTemplate'; sheetId: string; template: RollTemplate }
+  | { type: 'deleteRollTemplate'; sheetId: string; templateId: string }
+  | { type: 'reorderRollTemplates'; sheetId: string; templateIds: string[] }
   | { type: 'getHistory' }
   | { type: 'clearHistory' }
   | { type: 'roll'; sheetId: string; templateId: string };

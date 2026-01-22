@@ -9,13 +9,17 @@
   let currentSheetId = null;
   let currentSheet = null;
   let editingAttributeId = null;
+  let editingTemplateId = null;
   let draggedAttributeId = null;
+  let draggedTemplateId = null;
+  let collapsedHeadings = new Set(); // Track collapsed headings locally
 
   // DOM Elements
   const elements = {
     sheetIcons: document.getElementById('sheet-icons'),
     addSheetBtn: document.getElementById('add-sheet-btn'),
     attributesList: document.getElementById('attributes-list'),
+    addHeadingBtn: document.getElementById('add-heading-btn'),
     addStringAttrBtn: document.getElementById('add-string-attr-btn'),
     addIntegerAttrBtn: document.getElementById('add-integer-attr-btn'),
     addDerivedAttrBtn: document.getElementById('add-derived-attr-btn'),
@@ -34,6 +38,10 @@
   const templates = {
     attributeView: document.getElementById('attribute-view-template'),
     attributeEdit: document.getElementById('attribute-edit-template'),
+    headingView: document.getElementById('heading-view-template'),
+    headingEdit: document.getElementById('heading-edit-template'),
+    templateView: document.getElementById('template-view-template'),
+    templateEdit: document.getElementById('template-edit-template'),
   };
 
   // ============================================================
@@ -113,19 +121,23 @@
 
       case 'sheetUpdated':
         if (message.sheet.id === currentSheetId) {
-          // Preserve editing state if we're editing
-          const wasEditing = editingAttributeId;
+          const wasEditingAttr = editingAttributeId;
+          const wasEditingTemplate = editingTemplateId;
           currentSheet = message.sheet;
           renderSheet();
-          if (wasEditing) {
-            // Re-enter edit mode if we were editing
-            const attr = currentSheet.attributes.find(a => a.id === wasEditing);
+          if (wasEditingAttr) {
+            const attr = currentSheet.attributes.find(a => a.id === wasEditingAttr);
             if (attr) {
-              enterEditMode(wasEditing);
+              enterEditMode(wasEditingAttr);
+            }
+          }
+          if (wasEditingTemplate) {
+            const tmpl = currentSheet.rollTemplates.find(t => t.id === wasEditingTemplate);
+            if (tmpl) {
+              enterTemplateEditMode(wasEditingTemplate);
             }
           }
         }
-        // Update sheet name in list
         const sheetInList = sheets.find(s => s.id === message.sheet.id);
         if (sheetInList) {
           sheetInList.name = message.sheet.name;
@@ -179,6 +191,7 @@
   function selectSheet(sheetId) {
     currentSheetId = sheetId;
     editingAttributeId = null;
+    editingTemplateId = null;
     send({ type: 'getSheet', sheetId });
     renderSheetIcons();
   }
@@ -237,13 +250,22 @@
     // Sort by order
     const sortedAttributes = [...currentSheet.attributes].sort((a, b) => a.order - b.order);
 
+    // Track current heading for indentation
+    let currentHeadingId = null;
+
     sortedAttributes.forEach(attr => {
-      const el = createAttributeElement(attr);
-      elements.attributesList.appendChild(el);
+      if (attr.type === 'heading') {
+        currentHeadingId = attr.id;
+        const el = createHeadingElement(attr);
+        elements.attributesList.appendChild(el);
+      } else {
+        const el = createAttributeElement(attr, currentHeadingId);
+        elements.attributesList.appendChild(el);
+      }
     });
   }
 
-  function createAttributeElement(attr) {
+  function createAttributeElement(attr, headingId) {
     const isEditing = editingAttributeId === attr.id;
     const template = isEditing ? templates.attributeEdit : templates.attributeView;
     const clone = template.content.cloneNode(true);
@@ -251,10 +273,45 @@
 
     el.dataset.attributeId = attr.id;
 
+    // Add indentation if under a heading
+    if (headingId) {
+      el.classList.add('indented');
+      el.dataset.headingId = headingId;
+      if (collapsedHeadings.has(headingId)) {
+        el.classList.add('collapsed');
+      }
+    }
+
     if (isEditing) {
       setupEditMode(el, attr);
     } else {
       setupViewMode(el, attr);
+    }
+
+    // Setup drag and drop (only in view mode)
+    if (!isEditing) {
+      setupDragAndDrop(el, attr.id);
+    }
+
+    return el;
+  }
+
+  function createHeadingElement(attr) {
+    const isEditing = editingAttributeId === attr.id;
+    const template = isEditing ? templates.headingEdit : templates.headingView;
+    const clone = template.content.cloneNode(true);
+    const el = clone.querySelector('.attribute-item');
+
+    el.dataset.attributeId = attr.id;
+
+    if (collapsedHeadings.has(attr.id)) {
+      el.classList.add('collapsed');
+    }
+
+    if (isEditing) {
+      setupHeadingEditMode(el, attr);
+    } else {
+      setupHeadingViewMode(el, attr);
     }
 
     // Setup drag and drop (only in view mode)
@@ -290,6 +347,17 @@
     }
 
     editBtn.addEventListener('click', () => enterEditMode(attr.id));
+  }
+
+  function setupHeadingViewMode(el, attr) {
+    const nameEl = el.querySelector('.heading-name');
+    const editBtn = el.querySelector('.edit-btn');
+    const collapseBtn = el.querySelector('.collapse-btn');
+
+    nameEl.textContent = attr.name;
+
+    editBtn.addEventListener('click', () => enterEditMode(attr.id));
+    collapseBtn.addEventListener('click', () => toggleHeadingCollapse(attr.id));
   }
 
   function setupEditMode(el, attr) {
@@ -349,6 +417,33 @@
     setTimeout(() => nameInput.focus(), 0);
   }
 
+  function setupHeadingEditMode(el, attr) {
+    const nameInput = el.querySelector('.edit-heading-name');
+    const saveBtn = el.querySelector('.save-btn');
+    const cancelBtn = el.querySelector('.cancel-btn');
+    const deleteBtn = el.querySelector('.delete-btn');
+
+    nameInput.value = attr.name;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveHeading(attr.id, nameInput.value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        exitEditMode();
+      }
+    };
+
+    nameInput.addEventListener('keydown', handleKeyDown);
+
+    saveBtn.addEventListener('click', () => saveHeading(attr.id, nameInput.value));
+    cancelBtn.addEventListener('click', () => exitEditMode());
+    deleteBtn.addEventListener('click', () => deleteAttribute(attr.id));
+
+    setTimeout(() => nameInput.focus(), 0);
+  }
+
   // ============================================================
   // Edit Mode
   // ============================================================
@@ -364,7 +459,6 @@
   }
 
   function saveAttribute(id, name, code, value, type) {
-    // Validate
     if (!name.trim()) {
       alert('Name is required');
       return;
@@ -406,6 +500,24 @@
     exitEditMode();
   }
 
+  function saveHeading(id, name) {
+    if (!name.trim()) {
+      alert('Name is required');
+      return;
+    }
+
+    const attr = currentSheet.attributes.find(a => a.id === id);
+    if (!attr) return;
+
+    const updatedAttr = {
+      ...attr,
+      name: name.trim(),
+    };
+
+    send({ type: 'updateAttribute', sheetId: currentSheetId, attribute: updatedAttr });
+    exitEditMode();
+  }
+
   function deleteAttribute(id) {
     if (confirm('Delete this attribute?')) {
       send({ type: 'deleteAttribute', sheetId: currentSheetId, attributeId: id });
@@ -414,14 +526,31 @@
   }
 
   // ============================================================
+  // Heading Collapse
+  // ============================================================
+
+  function toggleHeadingCollapse(headingId) {
+    if (collapsedHeadings.has(headingId)) {
+      collapsedHeadings.delete(headingId);
+    } else {
+      collapsedHeadings.add(headingId);
+    }
+    renderAttributes();
+  }
+
+  // ============================================================
   // Add Attribute
   // ============================================================
 
   function addAttribute(type) {
+    if (type === 'heading') {
+      addHeading();
+      return;
+    }
+
     const baseName = type === 'string' ? 'Text' : type === 'integer' ? 'Number' : 'Computed';
     const baseCode = type === 'string' ? 'text' : type === 'integer' ? 'num' : 'calc';
 
-    // Generate unique name and code
     let name = baseName;
     let code = baseCode;
     let counter = 1;
@@ -445,6 +574,24 @@
     } else {
       attribute.value = '';
     }
+
+    send({ type: 'createAttribute', sheetId: currentSheetId, attribute });
+  }
+
+  function addHeading() {
+    let name = 'New Section';
+    let counter = 1;
+
+    while (currentSheet.attributes.some(a => a.type === 'heading' && a.name === name)) {
+      counter++;
+      name = 'New Section ' + counter;
+    }
+
+    const attribute = {
+      name,
+      type: 'heading',
+      collapsed: false,
+    };
 
     send({ type: 'createAttribute', sheetId: currentSheetId, attribute });
   }
@@ -488,9 +635,9 @@
 
     draggedEl.classList.add('dragging');
 
-    const items = Array.from(elements.attributesList.querySelectorAll('.attribute-item'));
+    const items = Array.from(elements.attributesList.querySelectorAll('.attribute-item:not(.collapsed)'));
     const draggedIndex = items.indexOf(draggedEl);
-    const itemHeight = draggedEl.offsetHeight + 8; // Including gap
+    const itemHeight = draggedEl.offsetHeight + 4; // Including gap
 
     let currentIndex = draggedIndex;
     const startY = startEvent.clientY;
@@ -501,16 +648,9 @@
       const newIndex = Math.max(0, Math.min(items.length - 1, draggedIndex + indexDelta));
 
       if (newIndex !== currentIndex) {
-        // Remove drag-over from all
         items.forEach(item => item.classList.remove('drag-over'));
-
-        // Add drag-over to target position
         if (newIndex !== draggedIndex) {
-          if (newIndex > currentIndex) {
-            items[newIndex]?.classList.add('drag-over');
-          } else {
-            items[newIndex]?.classList.add('drag-over');
-          }
+          items[newIndex]?.classList.add('drag-over');
         }
         currentIndex = newIndex;
       }
@@ -524,7 +664,6 @@
       items.forEach(item => item.classList.remove('drag-over'));
 
       if (currentIndex !== draggedIndex) {
-        // Build new order
         const orderedIds = items.map(item => item.dataset.attributeId);
         const [removed] = orderedIds.splice(draggedIndex, 1);
         orderedIds.splice(currentIndex, 0, removed);
@@ -563,11 +702,9 @@
       return { value: 0 };
     }
 
-    // Replace @codes with values
     let expression = formula;
     const usedAttributes = [];
 
-    // Find all @code references
     const codeRegex = /@([a-z_]+)/g;
     let match;
 
@@ -580,35 +717,36 @@
       }
 
       if (attr.type === 'derived') {
-        return { error: `Cannot reference derived: @${code}` };
+        return { error: `Cannot ref derived` };
       }
 
       if (attr.type === 'string') {
-        return { error: `Cannot use string in formula: @${code}` };
+        return { error: `Cannot use string` };
+      }
+
+      if (attr.type === 'heading') {
+        return { error: `Invalid ref` };
       }
 
       usedAttributes.push({ code, value: attr.value });
       expression = expression.replace(new RegExp('@' + code, 'g'), attr.value);
     }
 
-    // Replace ceil and floor functions
     expression = expression.replace(/ceil\s*\(/g, 'Math.ceil(');
     expression = expression.replace(/floor\s*\(/g, 'Math.floor(');
 
-    // Validate expression (only allow safe characters)
     if (!/^[\d\s+\-*/().Math,ceil floor]+$/.test(expression)) {
       return { error: 'Invalid formula' };
     }
 
     try {
-      // Evaluate safely
       const result = Function('"use strict"; return (' + expression + ')')();
       if (typeof result !== 'number' || !isFinite(result)) {
         return { error: 'Invalid result' };
       }
       return { value: Math.floor(result), usedAttributes };
     } catch (e) {
-      return { error: 'Evaluation error' };
+      return { error: 'Eval error' };
     }
   }
 
@@ -619,12 +757,10 @@
   function validateCode(code, excludeId = null) {
     const normalized = normalizeCode(code);
 
-    // Must match pattern: lowercase letters and underscores only
     if (!/^[a-z_]+$/.test(normalized)) {
       return false;
     }
 
-    // Must be unique
     const isDuplicate = currentSheet.attributes.some(
       a => a.id !== excludeId && a.code === normalized
     );
@@ -637,17 +773,331 @@
   }
 
   // ============================================================
-  // Templates Rendering (placeholder)
+  // Roll Templates Rendering
   // ============================================================
 
   function renderTemplates() {
+    elements.templatesList.innerHTML = '';
+
     if (!currentSheet.rollTemplates || currentSheet.rollTemplates.length === 0) {
       elements.templatesList.innerHTML = '<div class="empty-state">No roll templates</div>';
       return;
     }
 
-    // TODO: Implement roll templates rendering
-    elements.templatesList.innerHTML = '<div class="empty-state">Roll templates coming soon</div>';
+    // Sort by order
+    const sortedTemplates = [...currentSheet.rollTemplates].sort((a, b) => a.order - b.order);
+
+    sortedTemplates.forEach(template => {
+      const el = createTemplateElement(template);
+      elements.templatesList.appendChild(el);
+    });
+  }
+
+  function createTemplateElement(template) {
+    const isEditing = editingTemplateId === template.id;
+    const htmlTemplate = isEditing ? templates.templateEdit : templates.templateView;
+    const clone = htmlTemplate.content.cloneNode(true);
+    const el = clone.querySelector('.template-item');
+
+    el.dataset.templateId = template.id;
+
+    // Validate formula
+    const validation = validateRollFormula(template.formula);
+
+    if (isEditing) {
+      setupTemplateEditMode(el, template, validation);
+    } else {
+      setupTemplateViewMode(el, template, validation);
+    }
+
+    // Setup drag and drop (only in view mode)
+    if (!isEditing) {
+      setupTemplateDragAndDrop(el, template.id);
+    }
+
+    return el;
+  }
+
+  function setupTemplateViewMode(el, template, validation) {
+    const nameEl = el.querySelector('.template-name');
+    const warningEl = el.querySelector('.template-warning');
+    const editBtn = el.querySelector('.edit-btn');
+    const rollBtn = el.querySelector('.roll-btn');
+
+    nameEl.textContent = template.name;
+
+    if (!validation.valid) {
+      el.classList.add('template-invalid');
+      warningEl.hidden = false;
+      warningEl.title = validation.error;
+      rollBtn.disabled = true;
+    } else {
+      warningEl.hidden = true;
+      rollBtn.disabled = false;
+    }
+
+    editBtn.addEventListener('click', () => enterTemplateEditMode(template.id));
+    rollBtn.addEventListener('click', () => executeRoll(template.id));
+  }
+
+  function setupTemplateEditMode(el, template, validation) {
+    const nameInput = el.querySelector('.edit-template-name');
+    const formulaInput = el.querySelector('.edit-template-formula');
+    const formatInput = el.querySelector('.edit-template-format');
+    const errorEl = el.querySelector('.template-validation-error');
+    const saveBtn = el.querySelector('.save-btn');
+    const cancelBtn = el.querySelector('.cancel-btn');
+    const deleteBtn = el.querySelector('.delete-btn');
+
+    nameInput.value = template.name;
+    formulaInput.value = template.formula;
+    formatInput.value = template.displayFormat;
+
+    if (!validation.valid) {
+      errorEl.textContent = validation.error;
+      errorEl.hidden = false;
+    }
+
+    // Live validation on formula input
+    formulaInput.addEventListener('input', () => {
+      const newValidation = validateRollFormula(formulaInput.value);
+      if (!newValidation.valid) {
+        formulaInput.classList.add('invalid');
+        errorEl.textContent = newValidation.error;
+        errorEl.hidden = false;
+      } else {
+        formulaInput.classList.remove('invalid');
+        errorEl.hidden = true;
+      }
+    });
+
+    // Save on Enter
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveTemplate(template.id, nameInput.value, formulaInput.value, formatInput.value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        exitTemplateEditMode();
+      }
+    };
+
+    nameInput.addEventListener('keydown', handleKeyDown);
+    formulaInput.addEventListener('keydown', handleKeyDown);
+    formatInput.addEventListener('keydown', handleKeyDown);
+
+    saveBtn.addEventListener('click', () => {
+      saveTemplate(template.id, nameInput.value, formulaInput.value, formatInput.value);
+    });
+
+    cancelBtn.addEventListener('click', () => exitTemplateEditMode());
+    deleteBtn.addEventListener('click', () => deleteTemplate(template.id));
+
+    // Focus the name input
+    setTimeout(() => nameInput.focus(), 0);
+  }
+
+  // ============================================================
+  // Roll Template Edit Mode
+  // ============================================================
+
+  function enterTemplateEditMode(templateId) {
+    editingTemplateId = templateId;
+    renderTemplates();
+  }
+
+  function exitTemplateEditMode() {
+    editingTemplateId = null;
+    renderTemplates();
+  }
+
+  function saveTemplate(id, name, formula, displayFormat) {
+    if (!name.trim()) {
+      alert('Name is required');
+      return;
+    }
+
+    if (!formula.trim()) {
+      alert('Formula is required');
+      return;
+    }
+
+    const template = currentSheet.rollTemplates.find(t => t.id === id);
+    if (!template) return;
+
+    const updatedTemplate = {
+      ...template,
+      name: name.trim(),
+      formula: formula.trim(),
+      displayFormat: displayFormat.trim(),
+    };
+
+    send({ type: 'updateRollTemplate', sheetId: currentSheetId, template: updatedTemplate });
+    exitTemplateEditMode();
+  }
+
+  function deleteTemplate(id) {
+    if (confirm('Delete this roll template?')) {
+      send({ type: 'deleteRollTemplate', sheetId: currentSheetId, templateId: id });
+      exitTemplateEditMode();
+    }
+  }
+
+  function addRollTemplate() {
+    let name = 'New Roll';
+    let counter = 1;
+
+    while (currentSheet.rollTemplates.some(t => t.name === name)) {
+      counter++;
+      name = 'New Roll ' + counter;
+    }
+
+    const template = {
+      name,
+      formula: '1d20',
+      displayFormat: '{name} rolled {result}',
+    };
+
+    send({ type: 'createRollTemplate', sheetId: currentSheetId, template });
+  }
+
+  // ============================================================
+  // Roll Template Validation
+  // ============================================================
+
+  function validateRollFormula(formula) {
+    if (!formula || !formula.trim()) {
+      return { valid: false, error: 'Formula is required' };
+    }
+
+    // Find all @code references
+    const codeRegex = /@([a-z_]+)/g;
+    let match;
+    const missingCodes = [];
+
+    while ((match = codeRegex.exec(formula)) !== null) {
+      const code = match[1];
+      const attr = currentSheet.attributes.find(a => a.code === code);
+
+      if (!attr) {
+        missingCodes.push(code);
+      } else if (attr.type === 'heading') {
+        return { valid: false, error: `Cannot reference heading: @${code}` };
+      } else if (attr.type === 'string') {
+        return { valid: false, error: `Cannot use string in formula: @${code}` };
+      }
+    }
+
+    if (missingCodes.length > 0) {
+      return { valid: false, error: `Unknown attribute(s): @${missingCodes.join(', @')}` };
+    }
+
+    return { valid: true };
+  }
+
+  // ============================================================
+  // Roll Template Drag and Drop
+  // ============================================================
+
+  function setupTemplateDragAndDrop(el, templateId) {
+    const handle = el.querySelector('.drag-handle');
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startTemplateDrag(templateId, e);
+    });
+
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (draggedTemplateId && draggedTemplateId !== templateId) {
+        el.classList.add('drag-over');
+      }
+    });
+
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drag-over');
+    });
+
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      if (draggedTemplateId && draggedTemplateId !== templateId) {
+        reorderTemplates(draggedTemplateId, templateId);
+      }
+    });
+  }
+
+  function startTemplateDrag(templateId, startEvent) {
+    draggedTemplateId = templateId;
+    const draggedEl = elements.templatesList.querySelector(`[data-template-id="${templateId}"]`);
+    if (!draggedEl) return;
+
+    draggedEl.classList.add('dragging');
+
+    const items = Array.from(elements.templatesList.querySelectorAll('.template-item'));
+    const draggedIndex = items.indexOf(draggedEl);
+    const itemHeight = draggedEl.offsetHeight + 8; // Including gap
+
+    let currentIndex = draggedIndex;
+    const startY = startEvent.clientY;
+
+    const onMouseMove = (e) => {
+      const deltaY = e.clientY - startY;
+      const indexDelta = Math.round(deltaY / itemHeight);
+      const newIndex = Math.max(0, Math.min(items.length - 1, draggedIndex + indexDelta));
+
+      if (newIndex !== currentIndex) {
+        items.forEach(item => item.classList.remove('drag-over'));
+        if (newIndex !== draggedIndex) {
+          items[newIndex]?.classList.add('drag-over');
+        }
+        currentIndex = newIndex;
+      }
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+
+      draggedEl.classList.remove('dragging');
+      items.forEach(item => item.classList.remove('drag-over'));
+
+      if (currentIndex !== draggedIndex) {
+        const orderedIds = items.map(item => item.dataset.templateId);
+        const [removed] = orderedIds.splice(draggedIndex, 1);
+        orderedIds.splice(currentIndex, 0, removed);
+
+        send({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
+      }
+
+      draggedTemplateId = null;
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
+  function reorderTemplates(draggedId, targetId) {
+    const items = Array.from(elements.templatesList.querySelectorAll('.template-item'));
+    const orderedIds = items.map(item => item.dataset.templateId);
+
+    const draggedIndex = orderedIds.indexOf(draggedId);
+    const targetIndex = orderedIds.indexOf(targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    orderedIds.splice(draggedIndex, 1);
+    orderedIds.splice(targetIndex, 0, draggedId);
+
+    send({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
+  }
+
+  // ============================================================
+  // Roll Execution (placeholder - to be implemented in Phase 2)
+  // ============================================================
+
+  function executeRoll(templateId) {
+    send({ type: 'roll', sheetId: currentSheetId, templateId });
   }
 
   // ============================================================
@@ -661,7 +1111,6 @@
     }
 
     elements.historyList.innerHTML = '';
-    // Show most recent first
     entries.slice().reverse().forEach(entry => {
       const el = createHistoryElement(entry);
       elements.historyList.appendChild(el);
@@ -669,7 +1118,6 @@
   }
 
   function addHistoryEntry(entry) {
-    // Remove empty state if present
     const emptyState = elements.historyList.querySelector('.empty-state');
     if (emptyState) {
       emptyState.remove();
@@ -741,18 +1189,18 @@
     elements.deleteConfirmBtn.addEventListener('click', confirmDeleteSheet);
     elements.clearHistoryBtn.addEventListener('click', clearHistory);
 
+    elements.addHeadingBtn.addEventListener('click', () => addAttribute('heading'));
     elements.addStringAttrBtn.addEventListener('click', () => addAttribute('string'));
     elements.addIntegerAttrBtn.addEventListener('click', () => addAttribute('integer'));
     elements.addDerivedAttrBtn.addEventListener('click', () => addAttribute('derived'));
+    elements.addTemplateBtn.addEventListener('click', addRollTemplate);
 
-    // Close modal on overlay click
     elements.deleteModal.addEventListener('click', (e) => {
       if (e.target === elements.deleteModal) {
         cancelDeleteSheet();
       }
     });
 
-    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !elements.deleteModal.hidden) {
         cancelDeleteSheet();

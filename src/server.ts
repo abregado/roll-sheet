@@ -5,6 +5,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import {
   CharacterSheet,
   Attribute,
+  RollTemplate,
   HistoryEntry,
   ClientMessage,
   ServerMessage,
@@ -247,7 +248,7 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
         if (attrIndex !== -1) {
           sheet.attributes[attrIndex] = message.attribute;
           // Update sheet name if the 'name' attribute was changed
-          if (message.attribute.code === 'name' && message.attribute.type === 'string') {
+          if (message.attribute.type === 'string' && message.attribute.code === 'name') {
             sheet.name = message.attribute.value;
           }
           saveSheets();
@@ -293,6 +294,76 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
         });
         // Sort by order
         sheet.attributes.sort((a, b) => a.order - b.order);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'createRollTemplate': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        const maxOrder = sheet.rollTemplates.reduce((max, t) => Math.max(max, t.order), -1);
+        const newTemplate: RollTemplate = {
+          ...message.template,
+          id: generateId(),
+          order: maxOrder + 1,
+        };
+        sheet.rollTemplates.push(newTemplate);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'updateRollTemplate': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        const templateIndex = sheet.rollTemplates.findIndex((t) => t.id === message.template.id);
+        if (templateIndex !== -1) {
+          sheet.rollTemplates[templateIndex] = message.template;
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Roll template not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'deleteRollTemplate': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        const templateIndex = sheet.rollTemplates.findIndex((t) => t.id === message.templateId);
+        if (templateIndex !== -1) {
+          sheet.rollTemplates.splice(templateIndex, 1);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Roll template not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'reorderRollTemplates': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        message.templateIds.forEach((id, index) => {
+          const template = sheet.rollTemplates.find((t) => t.id === id);
+          if (template) {
+            template.order = index;
+          }
+        });
+        sheet.rollTemplates.sort((a, b) => a.order - b.order);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
       } else {

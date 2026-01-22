@@ -117,15 +117,17 @@ input {
 .attributes-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
   margin-bottom: 1rem;
 }
 
+/* Attribute Item - Compact Single Line Layout */
 .attribute-item {
   background-color: #22223a;
-  border-radius: 8px;
-  padding: 0.75rem;
-  display: flex;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  display: grid;
+  grid-template-columns: auto 1fr minmax(60px, auto) auto auto;
   align-items: center;
   gap: 0.75rem;
   position: relative;
@@ -139,6 +141,8 @@ input {
 .attribute-item.editing {
   background-color: #2a2a4a;
   border: 1px solid #6366f1;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .attribute-item.dragging {
@@ -154,11 +158,20 @@ input {
   border: 1px solid #f59e0b;
 }
 
+/* Indented attributes (under headings) */
+.attribute-item.indented {
+  margin-left: 1.5rem;
+}
+
+.attribute-item.indented.collapsed {
+  display: none;
+}
+
 /* Drag Handle */
 .drag-handle {
   cursor: grab;
-  color: #555;
-  padding: 0.25rem;
+  color: #444;
+  padding: 0.125rem;
   border-radius: 4px;
   transition: color 0.2s ease;
   flex-shrink: 0;
@@ -177,37 +190,21 @@ input {
   opacity: 0.3;
 }
 
-/* Attribute Content */
-.attribute-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.attribute-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
-}
-
+/* Attribute Name */
 .attribute-name {
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #ccc;
 }
 
-.attribute-code {
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 0.8rem;
-  color: #6366f1;
-  flex-shrink: 0;
-}
-
+/* Attribute Value - centered in the row */
 .attribute-value-display {
-  font-size: 1.1rem;
-  color: #ddd;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  min-width: 60px;
 }
 
 .attribute-value-display.derived {
@@ -216,15 +213,103 @@ input {
 
 .attribute-value-display.error {
   color: #ef4444;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
+}
+
+/* Attribute Code - right aligned */
+.attribute-code {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.8rem;
+  color: #6366f1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Heading Items */
+.heading-item {
+  background-color: transparent;
+  padding: 0.75rem 0.5rem 0.25rem 0.5rem;
+  margin-top: 0.5rem;
+  border-bottom: 1px solid #3a3a5a;
+  border-radius: 0;
+  grid-template-columns: auto auto 1fr auto;
+}
+
+.heading-item:first-child {
+  margin-top: 0;
+}
+
+.heading-item:hover {
+  background-color: transparent;
+}
+
+.heading-item.editing {
+  background-color: #2a2a4a;
+  border-radius: 6px;
+  border: 1px solid #6366f1;
+  border-bottom: 1px solid #6366f1;
+  padding: 0.5rem 0.75rem;
+}
+
+.heading-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Collapse Button */
+.collapse-btn {
+  background: none;
+  border: none;
+  color: #666;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: color 0.2s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collapse-btn:hover {
+  color: #fff;
+}
+
+.collapse-btn .collapse-icon {
+  transition: transform 0.2s ease;
+}
+
+.heading-item.collapsed .collapse-btn .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+/* Edit Heading Input */
+.edit-heading-name {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  background-color: #1a1a2e;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.edit-heading-name:focus {
+  outline: none;
+  border-color: #6366f1;
 }
 
 /* Type Badge */
 .attribute-type-badge {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  color: #666;
-  margin-top: 0.25rem;
+  color: #555;
+  padding: 0.125rem 0.375rem;
+  background-color: #1a1a2e;
+  border-radius: 3px;
+  align-self: flex-start;
 }
 
 /* Edit Button (View Mode) */
@@ -276,6 +361,7 @@ input {
 .edit-input.edit-code {
   flex: 1;
   font-family: 'Consolas', 'Monaco', monospace;
+  color: #6366f1;
 }
 
 .edit-input.edit-value {
@@ -289,9 +375,10 @@ input {
 /* Edit Actions */
 .edit-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0.25rem;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .save-btn,
@@ -347,18 +434,20 @@ input {
 /* Add buttons */
 .add-attribute-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
 .add-btn {
-  flex: 1;
-  padding: 0.6rem;
+  flex: 1 1 auto;
+  min-width: fit-content;
+  padding: 0.5rem 0.75rem;
   background-color: transparent;
   color: #6366f1;
-  border: 2px dashed #3a3a5a;
-  border-radius: 8px;
+  border: 1px dashed #3a3a5a;
+  border-radius: 6px;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   transition: all 0.2s ease;
 }
 
@@ -375,66 +464,78 @@ input {
 .templates-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
 .template-item {
   background-color: #22223a;
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  transition: background-color 0.2s ease;
+}
+
+.template-item:hover {
+  background-color: #2a2a4a;
+}
+
+.template-item.editing {
+  background-color: #2a2a4a;
+  border: 1px solid #6366f1;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .template-item.template-invalid {
   border: 1px solid #ef4444;
 }
 
-.template-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
+.template-item.dragging {
+  opacity: 0.5;
+  background-color: #3a3a5a;
+}
+
+.template-item.drag-over {
+  border-top: 2px solid #6366f1;
 }
 
 .template-name {
-  font-weight: 600;
+  font-weight: 500;
+  color: #ccc;
 }
 
 .template-warning {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   background-color: #ef4444;
   color: #fff;
   border-radius: 50%;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
-.template-formula {
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 0.875rem;
-  color: #6366f1;
-  margin-bottom: 0.25rem;
-}
-
-.template-format {
-  font-size: 0.875rem;
-  color: #888;
-  font-style: italic;
-  margin-bottom: 0.75rem;
+.template-item:hover .edit-btn {
+  opacity: 1;
 }
 
 .roll-btn {
-  padding: 0.5rem 1.5rem;
+  padding: 0.5rem 1rem;
   background-color: #6366f1;
   color: #fff;
   border: none;
   border-radius: 4px;
   font-weight: 600;
+  font-size: 0.875rem;
   transition: background-color 0.2s ease;
+  flex-shrink: 0;
 }
 
 .roll-btn:hover:not(:disabled) {
@@ -445,6 +546,42 @@ input {
   background-color: #3a3a5a;
   color: #666;
   cursor: not-allowed;
+}
+
+/* Template Edit Mode */
+.template-edit-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.template-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.template-edit-row label {
+  width: 60px;
+  font-size: 0.8rem;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.template-edit-row .edit-input {
+  flex: 1;
+}
+
+.edit-input.edit-template-formula {
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: #6366f1;
+}
+
+.template-validation-error {
+  color: #ef4444;
+  font-size: 0.75rem;
+  padding-left: 60px;
 }
 
 /* Sheet Actions */

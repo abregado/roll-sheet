@@ -9,6 +9,120 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 - **Persistence**: Server-side JSON storage for sheets and history
 - **Communication**: WebSockets for real-time sync
 
+## Implementation Status
+
+### Completed
+
+- [x] Basic project setup (TypeScript, Node.js, WebSocket server)
+- [x] Two-column responsive layout with sheet sidebar
+- [x] Character sheet management (create, copy, delete with confirmation)
+- [x] Sheet selector sidebar with icons
+- [x] Real-time sync of sheet changes across clients
+- [x] **Attributes System**
+  - [x] String attributes
+  - [x] Integer attributes
+  - [x] Derived attributes with formula evaluation (`+`, `-`, `*`, `/`, `()`, `ceil()`, `floor()`)
+  - [x] Heading dividers with collapse/expand
+  - [x] Compact single-line display (Name | Value | @code)
+  - [x] Edit mode with cog icon (visible on hover)
+  - [x] Save (Enter/checkmark), Cancel (Escape/X), Delete (trash)
+  - [x] Drag-and-drop reordering
+  - [x] Code validation (lowercase alpha + underscore, unique)
+  - [x] Indentation for attributes under headings
+  - [x] Warning display for invalid derived formulas
+- [x] History panel UI (placeholder, shows "No rolls yet")
+- [x] Clear history button
+- [x] **Roll Templates UI**
+  - [x] Create/edit/delete roll templates
+  - [x] Compact single-line view mode (Name | Roll button)
+  - [x] Edit mode with name, formula, display format fields
+  - [x] Same edit pattern as attributes (cog icon on hover, Enter/Escape)
+  - [x] Drag-and-drop reordering
+  - [x] Formula validation (checks @code references exist)
+  - [x] Warning icon and disabled Roll button when invalid
+
+### Not Yet Implemented
+
+- [ ] **Dice Rolling Engine**
+  - [ ] Parse dice notation (`XdY`)
+  - [ ] Keep/drop modifiers (`kh`, `kl`, `dh`, `dl` with optional count)
+  - [ ] Stacking modifiers
+  - [ ] Attribute substitution in formulas
+- [ ] **History System**
+  - [ ] Execute rolls and record to history
+  - [ ] Display format string resolution
+  - [ ] Detailed breakdown (individual dice, dropped dice strikethrough, attributes used)
+  - [ ] Server persistence
+  - [ ] Real-time sync of new rolls to all clients
+
+---
+
+## Implementation Plan
+
+### Phase 1: Roll Templates (Complete)
+
+1. **Roll Template Data Model** - Done
+   - CRUD operations for roll templates in server
+   - WebSocket message types: createRollTemplate, updateRollTemplate, deleteRollTemplate, reorderRollTemplates
+
+2. **Roll Template UI** - Done
+   - View mode: compact single line with name, warning icon (if invalid), edit button, roll button
+   - Edit mode: labeled fields for name, formula, display format
+   - Same edit pattern as attributes (cog icon on hover, Enter/Escape)
+   - Drag-and-drop reordering
+
+3. **Roll Template Validation** - Done
+   - Parse formula to find `@code` references
+   - Check all codes exist in sheet's attributes (not headings or strings)
+   - Show warning icon and disable roll button if invalid
+
+### Phase 2: Dice Rolling Engine (Next)
+
+1. **Dice Parser**
+   - Tokenize formula into dice groups, operators, numbers, attribute refs
+   - Support: `XdY`, `kh[N]`, `kl[N]`, `dh[N]`, `dl[N]`
+   - Handle stacked modifiers: `4d6dl1dh1`
+
+2. **Dice Roller**
+   - Generate random rolls for each dice group
+   - Apply keep/drop modifiers
+   - Track which dice were kept vs dropped
+
+3. **Formula Evaluator**
+   - Substitute attribute values
+   - Evaluate arithmetic
+   - Return total and breakdown
+
+### Phase 3: History System
+
+1. **Roll Execution**
+   - Wire up roll button to execute template
+   - Build history entry with all details
+   - Send to server, broadcast to all clients
+
+2. **Display Format Resolution**
+   - Replace `{code}` with attribute values
+   - Replace `{result}` with roll total
+
+3. **History Rendering**
+   - Show display text prominently
+   - Show detailed breakdown below
+   - Highlight dropped dice with strikethrough
+   - List attributes used with values
+
+### Phase 4: Polish & Edge Cases
+
+1. **Warning system refinement**
+   - Update warnings when attributes are deleted/renamed
+   - Show which templates reference a deleted attribute
+
+2. **UX improvements**
+   - Loading states
+   - Error handling for network issues
+   - Reconnection feedback
+
+---
+
 ## Core Concepts
 
 ### Character Sheets
@@ -16,13 +130,21 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 Stored on the server, accessible by anyone. Each sheet contains:
 
 - **Attributes**: Named values with a code for roll references
-  - Types: `string`, `integer`, or `derived`
+  - Types: `string`, `integer`, `derived`, or `heading`
   - Example: Name="Dexterity", Code="dex", Type=integer, Value=3
   - New sheets start with one string attribute: Name (code: `name`)
+  - Compact single-line display: Name | Value | @code
   - Attributes are non-editable by default; click cog icon (visible on hover) to edit
   - Edit mode: Enter to save, Escape to cancel
   - Drag handle on left side for reordering
   - Code validation: lowercase alpha + underscore only, must be unique
+
+- **Heading Dividers**: Section headers for organizing attributes
+  - Only have a name field (no code or value)
+  - Cannot be referenced in formulas or roll templates
+  - Attributes below a heading are indented until the next heading
+  - Collapsible: click chevron to hide/show attributes under the heading
+  - Headings themselves are never indented (not nestable)
 
 - **Derived Attributes**: Computed values from formulas
   - Formula can reference other integer attributes via `@code`
@@ -49,7 +171,7 @@ Stored on the server, accessible by anyone. Each sheet contains:
 
 ### Attribute References
 
-- In formulas: `@code` (e.g., `1d20+@str`)
+- In roll formulas: `@code` (e.g., `1d20+@str`)
 - In display format: `{code}` (e.g., `"{name} rolled {result}"`)
 - Special: `{result}` = final roll total
 
@@ -67,24 +189,23 @@ Stored on the server, accessible by anyone. Each sheet contains:
 | Sheet  |    Character Sheet      |     History      |
 | Icons  |                         |                  |
 |        | [Attributes Section]    | [Roll entries    |
-| [S1]   |  - Name: "Strength"     |  with detailed   |
-| [S2]   |    Code: str            |  breakdowns]     |
-| [S3]   |    Value: 3             |                  |
+| [S1]   |   STATS (heading)       |  with detailed   |
+| [S2]   |     Strength    5 @str  |  breakdowns]     |
+| [S3]   |     Dexterity   3 @dex  |                  |
 |        |                         |                  |
 | [+]    | [Roll Templates]        |                  |
-|        |  - Attack Roll          |                  |
-|        |    1d20+@str            |                  |
-|        |    [Roll Button]        | [Clear History]  |
+|        |   Attack Roll    [Roll] |                  |
+|        |   Damage Roll    [Roll] | [Clear History]  |
 |        |                         |                  |
-|        | [Delete Sheet]          |                  |
+|        | [Copy] [Delete Sheet]   |                  |
 +--------+-------------------------+------------------+
 ```
 
-- Two-column layout on desktop
+- Two-column layout on desktop (sheet + history)
 - Responsive to window size changes
 - Sheet selector: vertical icon sidebar left of Character Sheet
 - Plus icon to add new sheet
-- Delete Sheet button at bottom with confirmation
+- Copy/Delete Sheet buttons at bottom (delete requires confirmation)
 
 ## Real-time Sync
 
@@ -94,6 +215,7 @@ Stored on the server, accessible by anyone. Each sheet contains:
 
 ## Validation
 
+- Derived attributes show error if formula references unknown/invalid codes
 - Roll Templates with missing attribute codes show warning (red/icon)
 - Invalid Roll Templates cannot be rolled
 - Attribute codes must be unique within a sheet
@@ -102,16 +224,26 @@ Stored on the server, accessible by anyone. Each sheet contains:
 
 ```
 roll-sheet/
-├── claude.md           # This file
+├── claude.md           # This file - project documentation
 ├── package.json
 ├── tsconfig.json
 ├── src/
 │   ├── server.ts       # Node.js WebSocket server
 │   └── types.ts        # TypeScript type definitions
 ├── public/
-│   ├── index.html      # Main HTML page
+│   ├── index.html      # Main HTML page with templates
 │   ├── styles.css      # CSS styling
 │   └── app.js          # Client-side JavaScript
 └── data/
-    ├── sheets.json     # Character sheet storage
-    └── history.json    # Roll history storage
+    ├── sheets.json     # Character sheet storage (auto-created)
+    └── history.json    # Roll history storage (auto-created)
+```
+
+## Running the App
+
+```bash
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000
