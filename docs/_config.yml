@@ -1,0 +1,4 @@
+title: Roll Sheet
+description: A web app for tracking TTRPG character attributes and rolling dice online
+theme: jekyll-theme-cayman
+baseurl: /roll-sheet
