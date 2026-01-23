@@ -229,11 +229,7 @@
   function applyReadOnlyMode() {
     const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
     elements.characterSheet.classList.toggle('read-only', isReadOnly);
-    // Toggle lock icons
-    const lockOpen = elements.readOnlyToggle.querySelector('.lock-open');
-    const lockClosed = elements.readOnlyToggle.querySelector('.lock-closed');
-    lockOpen.hidden = isReadOnly;
-    lockClosed.hidden = !isReadOnly;
+    // Lock icons are toggled via CSS based on .read-only class
   }
 
   function toggleReadOnly() {

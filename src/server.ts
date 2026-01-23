@@ -82,16 +82,7 @@ function createDefaultSheet(name?: string): CharacterSheet {
   return {
     id: generateId(),
     name: name || 'New Character',
-    attributes: [
-      {
-        id: generateId(),
-        name: 'Name',
-        code: 'name',
-        type: 'string',
-        value: name || 'New Character',
-        order: 0,
-      },
-    ],
+    attributes: [],
     rollTemplates: [],
   };
 }

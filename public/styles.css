@@ -167,22 +167,32 @@ input {
   color: #ccc;
 }
 
-.read-only-toggle .lock-icon {
+/* Lock icons - show/hide based on read-only state */
+.read-only-toggle .lock-open {
   display: block;
 }
 
-.read-only-toggle .lock-icon[hidden] {
+.read-only-toggle .lock-closed {
   display: none;
 }
 
-/* Read-only mode - show locked icon and fade */
+/* Read-only mode - swap icons and fade */
+.character-sheet.read-only .read-only-toggle .lock-open {
+  display: none;
+}
+
+.character-sheet.read-only .read-only-toggle .lock-closed {
+  display: block;
+}
+
 .character-sheet.read-only .read-only-toggle {
   opacity: 0.5;
-  background-color: #3a3a5a;
+  background-color: transparent;
 }
 
 .character-sheet.read-only .read-only-toggle:hover {
   opacity: 0.8;
+  background-color: #3a3a5a;
 }
 
 .sheet-rename-form {
