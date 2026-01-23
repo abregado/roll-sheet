@@ -2,6 +2,11 @@
 
 A web app for tracking TTRPG character attributes and rolling dice online with real-time synchronization.
 
+## Instructions for Claude
+
+- **Always ask questions before implementing** - Clarify requirements, confirm approach, and understand the user's intent before writing code.
+- **Never start/stop/restart the server** - The user manages the dev server themselves. Do not run `npm run dev`, kill node processes, or similar commands.
+
 ## Architecture
 
 - **Server**: Node.js with WebSockets (ws library)
@@ -32,8 +37,6 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [x] Warning icon for invalid derived formulas (view mode)
   - [x] Live formula validation in edit mode
   - [x] Letter-based auto-naming (text_a, text_b, ... text_z, text_aa, etc.)
-- [x] History panel UI (placeholder, shows "No rolls yet")
-- [x] Clear history button
 - [x] **Roll Templates UI**
   - [x] Create/edit/delete roll templates
   - [x] Compact single-line view mode (Name | Roll button)
@@ -44,90 +47,48 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [x] Warning icon and disabled Roll button when invalid
   - [x] Heading dividers with collapse/expand (same as attributes)
   - [x] Multiple formula variants per template (split button dropdown)
+- [x] **Dice Rolling Engine**
+  - [x] Parse dice notation (`XdY`)
+  - [x] Keep/drop modifiers (`kh`, `kl`, `dh`, `dl` with optional count)
+  - [x] Stacking modifiers (e.g., `4d6dl1dh1`)
+  - [x] Attribute substitution in formulas
+  - [x] Parentheses support for grouping
+- [x] **History System**
+  - [x] Execute rolls and record to history
+  - [x] Display format string resolution (`{code}`, `{result}`)
+  - [x] Collapsible detailed breakdown (click chevron to expand)
+  - [x] Individual dice shown, dropped dice with strikethrough
+  - [x] Attributes used shown with names (not codes) in purple
+  - [x] Server persistence
+  - [x] Real-time sync of new rolls to all clients
+  - [x] Clear history button
 
 ### Not Yet Implemented
 
-- [ ] **Dice Rolling Engine**
-  - [ ] Parse dice notation (`XdY`)
-  - [ ] Keep/drop modifiers (`kh`, `kl`, `dh`, `dl` with optional count)
-  - [ ] Stacking modifiers
-  - [ ] Attribute substitution in formulas
-- [ ] **History System**
-  - [ ] Execute rolls and record to history
-  - [ ] Display format string resolution
-  - [ ] Detailed breakdown (individual dice, dropped dice strikethrough, attributes used)
-  - [ ] Server persistence
-  - [ ] Real-time sync of new rolls to all clients
+- [ ] **Polish & Edge Cases**
+  - [ ] Loading states
+  - [ ] Error handling for network issues
+  - [ ] Reconnection feedback
 
----
+## Small future ideas to consider
+- renaming of Sheets, including manually choosing the two letter initial for the sidebar
+- adding images to represent each roll template
+- Using images in the roll history to create more drama. Drag an image onto a Roll Template the upload it and add it to the roll template.
+- For roll templates, a conditional for triggering a super entry in the history (like a critical hit, {result} >= 20)
+- support for multiple {results} using square brackets in dice formula ("[1d20][1d20]" gives {result} and {result2})
+- css customization per sheet via a paint icon at the bottom of the sheet. Has several premade css styles to choose from (Light, Dark, Retro, Paper)
+- support for dragging the divider between sheet and history to change the width of the columns
+- animated transition when a new entry is added to the history, to give notificaton that something happened.
+- super transitions when a super result was rolled
+- columns for attributes, so the user can have more of them side by side
+- a css style and new layout for mobile users. I mean, right now it works, but it isn't pretty or usable.
+- include carbon copy of formula used in the expanded history entry of a roll
+- a toggle at the top of the sheet to set a sheet as read only, hiding all the UI for edit mode and adding new entries. Rolling still works as normal.
 
-## Implementation Plan
-
-### Phase 1: Roll Templates (Complete)
-
-1. **Roll Template Data Model** - Done
-   - CRUD operations for roll templates in server
-   - WebSocket message types: createRollTemplate, updateRollTemplate, deleteRollTemplate, reorderRollTemplates
-   - Support for both 'roll' and 'heading' types
-   - Multiple formula variants per template (formulas array with title, formula, displayFormat)
-
-2. **Roll Template UI** - Done
-   - View mode: compact single line with name, warning icon (if invalid), edit button, roll button
-   - Split-button dropdown when template has multiple formula variants
-   - Edit mode: name field plus dynamic list of formula rows (add/remove variants)
-   - Same edit pattern as attributes (cog icon on hover, Enter/Escape)
-   - Drag-and-drop reordering
-   - Heading dividers with collapse/expand functionality
-
-3. **Roll Template Validation** - Done
-   - Parse all formulas to find `@code` references
-   - Check all codes exist in sheet's attributes (not headings or strings)
-   - Show warning icon and disable roll button if any formula is invalid
-
-### Phase 2: Dice Rolling Engine (Next)
-
-1. **Dice Parser**
-   - Tokenize formula into dice groups, operators, numbers, attribute refs
-   - Support: `XdY`, `kh[N]`, `kl[N]`, `dh[N]`, `dl[N]`
-   - Handle stacked modifiers: `4d6dl1dh1`
-
-2. **Dice Roller**
-   - Generate random rolls for each dice group
-   - Apply keep/drop modifiers
-   - Track which dice were kept vs dropped
-
-3. **Formula Evaluator**
-   - Substitute attribute values
-   - Evaluate arithmetic
-   - Return total and breakdown
-
-### Phase 3: History System
-
-1. **Roll Execution**
-   - Wire up roll button to execute template
-   - Build history entry with all details
-   - Send to server, broadcast to all clients
-
-2. **Display Format Resolution**
-   - Replace `{code}` with attribute values
-   - Replace `{result}` with roll total
-
-3. **History Rendering**
-   - Show display text prominently
-   - Show detailed breakdown below
-   - Highlight dropped dice with strikethrough
-   - List attributes used with values
-
-### Phase 4: Polish & Edge Cases
-
-1. **Warning system refinement**
-   - Update warnings when attributes are deleted/renamed
-   - Show which templates reference a deleted attribute
-
-2. **UX improvements**
-   - Loading states
-   - Error handling for network issues
-   - Reconnection feedback
+## Big new features to add
+### Resource sheet section
+New section for sheets to track resources like HP, Ability charges, Spell tokens. Should be generic just like everything else but have nice UX.
+Selectable shapes for the resource pips (circle, star, triangle, ect) color and icon also customizable. Click pips to fill or empty them.
 
 ---
 
@@ -175,7 +136,8 @@ Stored on the server, accessible by anyone. Each sheet contains:
 ### Dice Notation
 
 - Basic: `XdY` (e.g., `2d6` = roll 2 six-sided dice)
-- Modifiers: `+`, `-` with numbers or `@attribute` references
+- Modifiers: `+`, `-`, `*`, `/` with numbers or `@attribute` references
+- Parentheses: `(1d6+@str)*2`
 - Keep/Drop highest/lowest:
   - `kh[N]` - keep highest N (default 1)
   - `kl[N]` - keep lowest N (default 1)
@@ -193,7 +155,10 @@ Stored on the server, accessible by anyone. Each sheet contains:
 
 - Server-synced roll history visible to all connected clients
 - Shows custom display format with resolved attribute values
-- Includes detailed breakdown: dice rolled, dropped dice (highlighted), attribute values used
+- Collapsed by default; click chevron to expand details
+- Expanded view shows:
+  - Dice breakdown with individual rolls (dropped dice in strikethrough)
+  - Attributes used with their names (in purple) and values
 - Persists until "Clear History" is clicked
 
 ## UI Layout
@@ -238,11 +203,12 @@ Stored on the server, accessible by anyone. Each sheet contains:
 
 ```
 roll-sheet/
-├── claude.md           # This file - project documentation
+├── CLAUDE.md           # This file - project documentation
 ├── package.json
 ├── tsconfig.json
 ├── src/
 │   ├── server.ts       # Node.js WebSocket server
+│   ├── dice.ts         # Dice parsing, rolling, and evaluation
 │   └── types.ts        # TypeScript type definitions
 ├── public/
 │   ├── index.html      # Main HTML page with templates
