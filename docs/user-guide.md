@@ -15,6 +15,7 @@ This guide covers everything you need to know to use Roll Sheet effectively.
 
 - [Getting Started](#getting-started)
 - [Character Sheets](#character-sheets)
+- [Read-Only Mode](#read-only-mode)
 - [Attributes](#attributes)
 - [Roll Templates](#roll-templates)
 - [Dice Notation](#dice-notation)
@@ -38,11 +39,20 @@ Click the **+** button in the sidebar to create your first character sheet.
 
 ### Creating a Sheet
 
-Click the **+** icon at the bottom of the sheet sidebar. A new sheet will be created with a default "Name" attribute.
+Click the **+** icon at the bottom of the sheet sidebar. A new sheet will be created empty, ready for you to add attributes. New sheets open in edit mode so you can start building immediately.
 
 ### Switching Sheets
 
-Click any sheet icon in the sidebar to switch to that character.
+Click any sheet icon in the sidebar to switch to that character. Sheets open in read-only mode by default.
+
+### Renaming a Sheet
+
+Hover over the sheet name at the top and click the pencil icon. You can change:
+
+- **Name** - The full sheet name displayed at the top
+- **Initials** - Custom 1-2 character text shown in the sidebar icon (optional)
+
+If you don't set custom initials, they're automatically generated from the sheet name.
 
 ### Copying a Sheet
 
@@ -51,6 +61,27 @@ Click **Copy Sheet** at the bottom of the character sheet to duplicate it. Usefu
 ### Deleting a Sheet
 
 Click **Delete Sheet** and confirm the deletion. This cannot be undone.
+
+---
+
+## Read-Only Mode
+
+The lock icon in the top-right corner toggles read-only mode. This is a client-side preference that isn't synced to other users.
+
+### When Locked (Read-Only)
+
+- All editing UI is hidden (cog icons, drag handles, add buttons)
+- Attribute codes are hidden for a cleaner look
+- **Rolling still works** - you can still click Roll buttons
+- Useful during gameplay to prevent accidental edits
+
+### When Unlocked (Edit Mode)
+
+- Full editing capabilities are available
+- Attribute codes are visible for reference
+- New sheets default to unlocked so you can start editing immediately
+
+Click the lock icon to toggle between modes at any time.
 
 ---
 
@@ -84,12 +115,14 @@ Section dividers to organize your attributes. Click the chevron to collapse/expa
 
 ### Working with Attributes
 
-- **View mode**: Shows Name | Value | @code
+- **View mode**: Shows Name | @code | Value (codes left-aligned, values right-aligned)
 - **Edit mode**: Click the cog icon (appears on hover) to edit
 - **Save**: Press Enter or click the checkmark
 - **Cancel**: Press Escape or click the X
 - **Delete**: Click the trash icon in edit mode
 - **Reorder**: Drag using the handle on the left
+
+Note: In read-only mode, attribute codes are hidden for a cleaner display.
 
 ### Attribute Codes
 
@@ -97,7 +130,7 @@ Each attribute has a unique code used for references:
 
 - Must be lowercase letters and underscores only
 - Must be unique within the sheet
-- Reserved codes: `result`, `maximum`, `minimum`
+- Reserved codes: `result`, `maximum`, `minimum`, `name`
 
 ---
 
@@ -131,7 +164,8 @@ Customize how roll results appear in history:
 {name} attacks for {result} damage!
 ```
 
-- `{code}` - Replaced with attribute value
+- `{name}` - The sheet name (reserved placeholder)
+- `{code}` - Replaced with attribute value (e.g., `{str}` for strength)
 - `{result}` - The final roll total
 
 ### Super Conditions

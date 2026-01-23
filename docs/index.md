@@ -37,6 +37,8 @@ Roll Sheet is a web application for tracking TTRPG character attributes and roll
 - **Real-time Sync** - All players see updates instantly
 - **Persistent History** - Roll history saved on the server
 - **Dice Notation** - Full support including keep/drop modifiers
+- **Read-Only Mode** - Lock sheets during gameplay to prevent accidental edits
+- **Sheet Customization** - Rename sheets and set custom sidebar icons
 
 ## Quick Links
 
