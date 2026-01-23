@@ -200,6 +200,16 @@ Stored on the server, accessible by anyone. Each sheet contains:
 - Roll Templates with missing attribute codes show warning (red/icon)
 - Invalid Roll Templates cannot be rolled
 - Attribute codes must be unique within a sheet
+- Reserved codes (`result`, `maximum`, `minimum`) cannot be used as attribute codes
+
+## Super Conditions
+
+Roll templates can have an optional super condition that triggers dramatic effects when met:
+- Placeholders: `{result}`, `{maximum}`, `{minimum}`
+- Operators: `>=`, `<=`, `>`, `<`, `==`
+- Arithmetic supported: `{result} >= {maximum}-1`
+- Example: `{result} >= 20` for natural 20s on a d20
+- Example: `{result} >= {maximum}` for max rolls on any dice
 
 ## File Structure
 

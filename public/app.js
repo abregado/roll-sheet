@@ -417,8 +417,13 @@
 
     // Code validation on input
     codeInput.addEventListener('input', () => {
-      const isValid = validateCode(codeInput.value, attr.id);
-      codeInput.classList.toggle('invalid', !isValid);
+      const validation = validateCode(codeInput.value, attr.id);
+      codeInput.classList.toggle('invalid', !validation.valid);
+      if (!validation.valid && validation.error) {
+        codeInput.title = validation.error;
+      } else {
+        codeInput.title = '';
+      }
     });
 
     // Save on Enter
@@ -494,8 +499,9 @@
       return;
     }
 
-    if (!validateCode(code, id)) {
-      alert('Invalid code. Use lowercase letters and underscores only. Code must be unique.');
+    const codeValidation = validateCode(code, id);
+    if (!codeValidation.valid) {
+      alert('Invalid code: ' + codeValidation.error);
       return;
     }
 
@@ -803,18 +809,33 @@
   // Validation
   // ============================================================
 
+  // Reserved codes that cannot be used for attributes
+  const RESERVED_CODES = ['result', 'maximum', 'minimum'];
+
+  function isReservedCode(code) {
+    return RESERVED_CODES.includes(code.toLowerCase());
+  }
+
   function validateCode(code, excludeId = null) {
     const normalized = normalizeCode(code);
 
     if (!/^[a-z_]+$/.test(normalized)) {
-      return false;
+      return { valid: false, error: 'Use lowercase letters and underscores only' };
+    }
+
+    if (isReservedCode(normalized)) {
+      return { valid: false, error: `"${normalized}" is reserved for super conditions` };
     }
 
     const isDuplicate = currentSheet.attributes.some(
       a => a.id !== excludeId && a.code === normalized
     );
 
-    return !isDuplicate;
+    if (isDuplicate) {
+      return { valid: false, error: 'Code must be unique' };
+    }
+
+    return { valid: true };
   }
 
   function normalizeCode(code) {

@@ -11,7 +11,7 @@ import {
   ClientMessage,
   ServerMessage,
 } from './types';
-import { executeRoll } from './dice';
+import { executeRoll, isReservedCode } from './dice';
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, '../data');
@@ -228,6 +228,12 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'createAttribute': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
+        // Check for reserved codes
+        const attrCode = 'code' in message.attribute ? String(message.attribute.code) : null;
+        if (attrCode && isReservedCode(attrCode)) {
+          send(ws, { type: 'error', message: `"${attrCode}" is a reserved code and cannot be used` });
+          break;
+        }
         const maxOrder = sheet.attributes.reduce((max, attr) => Math.max(max, attr.order), -1);
         const newAttribute: Attribute = {
           ...message.attribute,
@@ -246,6 +252,12 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'updateAttribute': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
+        // Check for reserved codes
+        const attrCode = 'code' in message.attribute ? String(message.attribute.code) : null;
+        if (attrCode && isReservedCode(attrCode)) {
+          send(ws, { type: 'error', message: `"${attrCode}" is a reserved code and cannot be used` });
+          break;
+        }
         const attrIndex = sheet.attributes.findIndex((a) => a.id === message.attribute.id);
         if (attrIndex !== -1) {
           sheet.attributes[attrIndex] = message.attribute;

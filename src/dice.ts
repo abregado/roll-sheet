@@ -375,26 +375,147 @@ export function evaluateFormula(
  * Resolve display format string
  */
 /**
- * Evaluate a super condition (e.g., "{result} >= 20")
- * Supports comparison operators: >=, <=, >, <, ==
+ * Reserved codes that cannot be used for attributes
  */
-export function evaluateSuperCondition(condition: string, total: number): boolean {
+export const RESERVED_CODES = ['result', 'maximum', 'minimum'];
+
+/**
+ * Check if a code is reserved
+ */
+export function isReservedCode(code: string): boolean {
+  return RESERVED_CODES.includes(code.toLowerCase());
+}
+
+/**
+ * Calculate theoretical minimum and maximum for a formula
+ */
+export function calculateFormulaRange(
+  tokens: DiceToken[],
+  attributeValues: Map<string, number>
+): { minimum: number; maximum: number } {
+  const minParts: (number | string)[] = [];
+  const maxParts: (number | string)[] = [];
+
+  for (const token of tokens) {
+    switch (token.type) {
+      case 'number':
+        minParts.push(token.value);
+        maxParts.push(token.value);
+        break;
+
+      case 'dice': {
+        // Calculate how many dice are kept after modifiers
+        let keptCount = token.count;
+        for (const mod of token.modifiers) {
+          if (mod.type === 'dl' || mod.type === 'dh') {
+            keptCount = Math.max(0, keptCount - mod.count);
+          } else if (mod.type === 'kl' || mod.type === 'kh') {
+            keptCount = Math.min(keptCount, mod.count);
+          }
+        }
+        // Minimum: all kept dice roll 1
+        minParts.push(keptCount * 1);
+        // Maximum: all kept dice roll max
+        maxParts.push(keptCount * token.sides);
+        break;
+      }
+
+      case 'attribute': {
+        const value = attributeValues.get(token.code);
+        if (value !== undefined) {
+          minParts.push(value);
+          maxParts.push(value);
+        } else {
+          minParts.push(0);
+          maxParts.push(0);
+        }
+        break;
+      }
+
+      case 'operator':
+        minParts.push(token.value);
+        maxParts.push(token.value);
+        break;
+
+      case 'lparen':
+        minParts.push('(');
+        maxParts.push('(');
+        break;
+
+      case 'rparen':
+        minParts.push(')');
+        maxParts.push(')');
+        break;
+    }
+  }
+
+  // Evaluate the expressions
+  let minimum = 0;
+  let maximum = 0;
+
+  try {
+    const minExpr = minParts.join('');
+    minimum = Function(`"use strict"; return (${minExpr})`)();
+  } catch {
+    minimum = 0;
+  }
+
+  try {
+    const maxExpr = maxParts.join('');
+    maximum = Function(`"use strict"; return (${maxExpr})`)();
+  } catch {
+    maximum = 0;
+  }
+
+  return { minimum, maximum };
+}
+
+/**
+ * Evaluate a super condition (e.g., "{result} >= {maximum}")
+ * Supports comparison operators: >=, <=, >, <, ==
+ * Supports placeholders: {result}, {maximum}, {minimum}
+ */
+export function evaluateSuperCondition(
+  condition: string,
+  total: number,
+  minimum: number,
+  maximum: number
+): boolean {
   if (!condition || !condition.trim()) {
     return false;
   }
 
-  // Replace {result} with the total
-  let expr = condition.replace(/\{result\}/gi, total.toString());
+  // Replace placeholders with values
+  let expr = condition
+    .replace(/\{result\}/gi, total.toString())
+    .replace(/\{maximum\}/gi, maximum.toString())
+    .replace(/\{minimum\}/gi, minimum.toString());
 
-  // Match pattern: number operator number
-  const match = expr.match(/^\s*(\d+(?:\.\d+)?)\s*(>=|<=|>|<|==)\s*(\d+(?:\.\d+)?)\s*$/);
-  if (!match) {
+  // Evaluate simple arithmetic on each side first, then compare
+  // Split by comparison operator
+  const compMatch = expr.match(/^(.+?)(>=|<=|>|<|==)(.+)$/);
+  if (!compMatch) {
     return false;
   }
 
-  const left = parseFloat(match[1]);
-  const operator = match[2];
-  const right = parseFloat(match[3]);
+  const leftExpr = compMatch[1].trim();
+  const operator = compMatch[2];
+  const rightExpr = compMatch[3].trim();
+
+  // Evaluate left and right sides (allow simple math like {maximum}-1)
+  let left: number;
+  let right: number;
+
+  try {
+    // Only allow safe characters: digits, operators, parentheses, spaces, decimal points
+    if (!/^[\d\s+\-*/().]+$/.test(leftExpr) || !/^[\d\s+\-*/().]+$/.test(rightExpr)) {
+      return false;
+    }
+    left = Function(`"use strict"; return (${leftExpr})`)();
+    right = Function(`"use strict"; return (${rightExpr})`)();
+  } catch {
+    return false;
+  }
 
   switch (operator) {
     case '>=':
@@ -496,9 +617,12 @@ export function executeRoll(
     total,
   };
 
+  // Calculate theoretical min/max for super condition evaluation
+  const { minimum, maximum } = calculateFormulaRange(tokens, attributeMap);
+
   // Check super condition
   const isSuper = template.superCondition
-    ? evaluateSuperCondition(template.superCondition, total)
+    ? evaluateSuperCondition(template.superCondition, total, minimum, maximum)
     : false;
 
   return {
