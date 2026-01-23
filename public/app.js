@@ -14,11 +14,23 @@
   let draggedTemplateId = null;
   let collapsedHeadings = new Set(); // Track collapsed headings locally
   let collapsedTemplateHeadings = new Set(); // Track collapsed template headings locally
+  let readOnlySheets = new Set(); // Track which sheets are in read-only mode (client-side only)
+  let isRenaming = false;
 
   // DOM Elements
   const elements = {
     sheetIcons: document.getElementById('sheet-icons'),
     addSheetBtn: document.getElementById('add-sheet-btn'),
+    characterSheet: document.querySelector('.character-sheet'),
+    sheetTitleRow: document.querySelector('.sheet-title-row'),
+    sheetName: document.getElementById('sheet-name'),
+    renameBtn: document.getElementById('rename-btn'),
+    renameForm: document.getElementById('sheet-rename-form'),
+    renameNameInput: document.getElementById('rename-name-input'),
+    renameInitialsInput: document.getElementById('rename-initials-input'),
+    renameSaveBtn: document.getElementById('rename-save-btn'),
+    renameCancelBtn: document.getElementById('rename-cancel-btn'),
+    readOnlyToggle: document.getElementById('read-only-toggle'),
     attributesList: document.getElementById('attributes-list'),
     addHeadingBtn: document.getElementById('add-heading-btn'),
     addStringAttrBtn: document.getElementById('add-string-attr-btn'),
@@ -109,7 +121,12 @@
       case 'sheetCreated':
         sheets.push({ id: message.sheet.id, name: message.sheet.name });
         renderSheetIcons();
+        // New sheets should be unlocked for editing
+        readOnlySheets.delete(message.sheet.id);
         selectSheet(message.sheet.id);
+        // Ensure it stays unlocked after selectSheet
+        readOnlySheets.delete(message.sheet.id);
+        applyReadOnlyMode();
         break;
 
       case 'sheetDeleted':
@@ -146,6 +163,7 @@
         const sheetInList = sheets.find(s => s.id === message.sheet.id);
         if (sheetInList) {
           sheetInList.name = message.sheet.name;
+          sheetInList.initials = message.sheet.initials;
           renderSheetIcons();
         }
         break;
@@ -179,7 +197,8 @@
       btn.className = 'sheet-icon' + (sheet.id === currentSheetId ? ' active' : '');
       btn.dataset.sheetId = sheet.id;
       btn.title = sheet.name;
-      btn.textContent = getInitials(sheet.name);
+      // Use custom initials if set, otherwise compute from name
+      btn.textContent = sheet.initials || getInitials(sheet.name);
       btn.addEventListener('click', () => selectSheet(sheet.id));
       elements.sheetIcons.appendChild(btn);
     });
@@ -197,8 +216,87 @@
     currentSheetId = sheetId;
     editingAttributeId = null;
     editingTemplateId = null;
+    isRenaming = false;
+    // Default to read-only when selecting a sheet
+    if (!readOnlySheets.has(sheetId)) {
+      readOnlySheets.add(sheetId);
+    }
     send({ type: 'getSheet', sheetId });
     renderSheetIcons();
+    applyReadOnlyMode();
+  }
+
+  function applyReadOnlyMode() {
+    const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
+    elements.characterSheet.classList.toggle('read-only', isReadOnly);
+    // Toggle lock icons
+    const lockOpen = elements.readOnlyToggle.querySelector('.lock-open');
+    const lockClosed = elements.readOnlyToggle.querySelector('.lock-closed');
+    lockOpen.hidden = isReadOnly;
+    lockClosed.hidden = !isReadOnly;
+  }
+
+  function toggleReadOnly() {
+    if (!currentSheetId) return;
+
+    if (readOnlySheets.has(currentSheetId)) {
+      readOnlySheets.delete(currentSheetId);
+    } else {
+      readOnlySheets.add(currentSheetId);
+      // Exit any edit mode when going read-only
+      if (editingAttributeId) exitEditMode();
+      if (editingTemplateId) exitTemplateEditMode();
+      if (isRenaming) cancelRename();
+    }
+    applyReadOnlyMode();
+  }
+
+  // ============================================================
+  // Sheet Rename
+  // ============================================================
+
+  function startRename() {
+    if (!currentSheet || readOnlySheets.has(currentSheetId)) return;
+
+    isRenaming = true;
+    elements.renameNameInput.value = currentSheet.name;
+    // Find sheet in list to get initials
+    const sheetInfo = sheets.find(s => s.id === currentSheetId);
+    elements.renameInitialsInput.value = sheetInfo?.initials || '';
+
+    elements.sheetTitleRow.hidden = true;
+    elements.renameForm.hidden = false;
+    elements.renameNameInput.focus();
+    elements.renameNameInput.select();
+  }
+
+  function saveRename() {
+    const name = elements.renameNameInput.value.trim();
+    if (!name) {
+      alert('Name is required');
+      return;
+    }
+
+    // Limit initials to 2 characters
+    let initials = elements.renameInitialsInput.value.trim().toUpperCase();
+    if (initials.length > 2) {
+      initials = initials.substring(0, 2);
+    }
+
+    send({
+      type: 'updateSheet',
+      sheetId: currentSheetId,
+      name: name,
+      initials: initials || undefined
+    });
+
+    cancelRename();
+  }
+
+  function cancelRename() {
+    isRenaming = false;
+    elements.sheetTitleRow.hidden = false;
+    elements.renameForm.hidden = true;
   }
 
   function createSheet() {
@@ -233,8 +331,12 @@
   function renderSheet() {
     if (!currentSheet) {
       elements.attributesList.innerHTML = '<div class="empty-state">No sheet selected</div>';
+      elements.sheetName.textContent = 'Character Sheet';
       return;
     }
+
+    // Update sheet name display
+    elements.sheetName.textContent = currentSheet.name;
 
     renderAttributes();
     renderTemplates();
@@ -810,7 +912,7 @@
   // ============================================================
 
   // Reserved codes that cannot be used for attributes
-  const RESERVED_CODES = ['result', 'maximum', 'minimum'];
+  const RESERVED_CODES = ['result', 'maximum', 'minimum', 'name'];
 
   function isReservedCode(code) {
     return RESERVED_CODES.includes(code.toLowerCase());
@@ -824,7 +926,7 @@
     }
 
     if (isReservedCode(normalized)) {
-      return { valid: false, error: `"${normalized}" is reserved for super conditions` };
+      return { valid: false, error: `"${normalized}" is a reserved code` };
     }
 
     const isDuplicate = currentSheet.attributes.some(
@@ -1838,6 +1940,32 @@
     elements.deleteConfirmBtn.addEventListener('click', confirmDeleteSheet);
     elements.clearHistoryBtn.addEventListener('click', clearHistory);
 
+    // Rename sheet
+    elements.renameBtn.addEventListener('click', startRename);
+    elements.renameSaveBtn.addEventListener('click', saveRename);
+    elements.renameCancelBtn.addEventListener('click', cancelRename);
+    elements.renameNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveRename();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelRename();
+      }
+    });
+    elements.renameInitialsInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveRename();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelRename();
+      }
+    });
+
+    // Read-only toggle
+    elements.readOnlyToggle.addEventListener('click', toggleReadOnly);
+
     elements.addHeadingBtn.addEventListener('click', () => addAttribute('heading'));
     elements.addStringAttrBtn.addEventListener('click', () => addAttribute('string'));
     elements.addIntegerAttrBtn.addEventListener('click', () => addAttribute('integer'));
@@ -1854,6 +1982,10 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !elements.deleteModal.hidden) {
         cancelDeleteSheet();
+      }
+      // Also handle escape for rename
+      if (e.key === 'Escape' && isRenaming) {
+        cancelRename();
       }
     });
   }

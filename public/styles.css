@@ -107,6 +107,141 @@ input {
   border-right: 1px solid #2a2a4a;
 }
 
+/* Sheet Header */
+.sheet-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.sheet-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sheet-name {
+  margin: 0;
+}
+
+.rename-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: #666;
+  padding: 0.375rem;
+  border-radius: 4px;
+  transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sheet-title-row:hover .rename-btn {
+  opacity: 1;
+}
+
+.rename-btn:hover {
+  color: #6366f1;
+  background-color: rgba(99, 102, 241, 0.1);
+}
+
+/* Read-only toggle - lock icon */
+.read-only-toggle {
+  margin-left: auto;
+  background-color: #2a2a4a;
+  border: none;
+  color: #888;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.read-only-toggle:hover {
+  background-color: #3a3a5a;
+  color: #ccc;
+}
+
+.read-only-toggle .lock-icon {
+  display: block;
+}
+
+.read-only-toggle .lock-icon[hidden] {
+  display: none;
+}
+
+/* Read-only mode - show locked icon and fade */
+.character-sheet.read-only .read-only-toggle {
+  opacity: 0.5;
+  background-color: #3a3a5a;
+}
+
+.character-sheet.read-only .read-only-toggle:hover {
+  opacity: 0.8;
+}
+
+.sheet-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sheet-rename-form[hidden] {
+  display: none;
+}
+
+.sheet-title-row[hidden] {
+  display: none;
+}
+
+.rename-name-input {
+  flex: 1;
+}
+
+.rename-initials-input {
+  width: 60px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* Read-only mode styles */
+.character-sheet.read-only .edit-btn,
+.character-sheet.read-only .drag-handle,
+.character-sheet.read-only .add-attribute-controls,
+.character-sheet.read-only .add-template-controls,
+.character-sheet.read-only .sheet-actions,
+.character-sheet.read-only .rename-btn,
+.character-sheet.read-only .attribute-code {
+  display: none !important;
+}
+
+.character-sheet.read-only .attribute-item {
+  grid-template-columns: 1fr auto auto;
+}
+
+.character-sheet.read-only .template-item {
+  grid-template-columns: 1fr auto auto;
+}
+
+/* Disable hover states in read-only mode for attributes and non-heading templates */
+.character-sheet.read-only .attribute-item:not(.heading-item):hover {
+  background-color: #22223a;
+}
+
+.character-sheet.read-only .template-item:not(.template-heading-item):hover {
+  background-color: #22223a;
+}
+
+.character-sheet.read-only .heading-item,
+.character-sheet.read-only .template-heading-item {
+  grid-template-columns: auto 1fr;
+}
+
 /* Sections */
 .attributes-section,
 .templates-section {
@@ -122,12 +257,13 @@ input {
 }
 
 /* Attribute Item - Compact Single Line Layout */
+/* Layout: drag-handle | name | code | value | warning | edit-btn */
 .attribute-item {
   background-color: #22223a;
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
   display: grid;
-  grid-template-columns: auto 1fr minmax(60px, auto) auto auto auto;
+  grid-template-columns: auto 1fr auto auto auto auto;
   align-items: center;
   gap: 0.75rem;
   position: relative;
@@ -199,12 +335,12 @@ input {
   color: #ccc;
 }
 
-/* Attribute Value - centered in the row */
+/* Attribute Value - right justified */
 .attribute-value-display {
   font-weight: 600;
   color: #fff;
-  text-align: center;
-  min-width: 60px;
+  text-align: right;
+  min-width: 50px;
 }
 
 .attribute-value-display.derived {
@@ -242,13 +378,14 @@ input {
   margin-top: 0.25rem;
 }
 
-/* Attribute Code - right aligned */
+/* Attribute Code - left aligned with fixed width for alignment */
 .attribute-code {
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 0.8rem;
   color: #6366f1;
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
+  min-width: 80px;
 }
 
 /* Heading Items */

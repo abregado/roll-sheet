@@ -377,7 +377,7 @@ export function evaluateFormula(
 /**
  * Reserved codes that cannot be used for attributes
  */
-export const RESERVED_CODES = ['result', 'maximum', 'minimum'];
+export const RESERVED_CODES = ['result', 'maximum', 'minimum', 'name'];
 
 /**
  * Check if a code is reserved
@@ -536,15 +536,23 @@ export function evaluateSuperCondition(
 export function resolveDisplayFormat(
   format: string,
   attributes: Attribute[],
-  total: number
+  total: number,
+  sheetName: string
 ): string {
   let result = format;
 
   // Replace {result} with the total
   result = result.replace(/\{result\}/gi, total.toString());
 
+  // Replace {name} with the sheet name (reserved code)
+  result = result.replace(/\{name\}/gi, sheetName);
+
   // Replace {code} with attribute values
   result = result.replace(/\{([a-z_]+)\}/gi, (_, code) => {
+    // Skip if it was already handled (like {name})
+    if (code.toLowerCase() === 'name') {
+      return sheetName;
+    }
     const attr = attributes.find(
       (a) => 'code' in a && a.code.toLowerCase() === code.toLowerCase()
     );
@@ -599,15 +607,12 @@ export function executeRoll(
     }
   }
 
-  // Resolve display format
+  // Resolve display format (uses sheet.name for {name})
   const displayFormat = template.displayFormat || `${template.name}: {result}`;
-  const displayText = resolveDisplayFormat(displayFormat, sheet.attributes, total);
+  const displayText = resolveDisplayFormat(displayFormat, sheet.attributes, total, sheet.name);
 
-  // Get character name
-  const nameAttr = sheet.attributes.find(
-    (a) => a.type === 'string' && 'code' in a && a.code === 'name'
-  );
-  const characterName = nameAttr && 'value' in nameAttr ? String(nameAttr.value) : sheet.name;
+  // Character name is now always the sheet name
+  const characterName = sheet.name;
 
   const details: RollDetails = {
     formula: formulaVariant.formula,

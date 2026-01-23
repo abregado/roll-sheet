@@ -159,7 +159,7 @@ function broadcast(message: ServerMessage, exclude?: WebSocket): void {
 function handleMessage(ws: WebSocket, message: ClientMessage): void {
   switch (message.type) {
     case 'getSheets': {
-      const sheetList = sheets.map((s) => ({ id: s.id, name: s.name }));
+      const sheetList = sheets.map((s) => ({ id: s.id, name: s.name, initials: s.initials }));
       send(ws, { type: 'sheetList', sheets: sheetList });
       break;
     }
@@ -219,8 +219,31 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
         saveSheets();
         broadcast({ type: 'sheetDeleted', sheetId: message.sheetId });
         // Also send updated sheet list
-        const sheetList = sheets.map((s) => ({ id: s.id, name: s.name }));
+        const sheetList = sheets.map((s) => ({ id: s.id, name: s.name, initials: s.initials }));
         broadcast({ type: 'sheetList', sheets: sheetList });
+      }
+      break;
+    }
+
+    case 'updateSheet': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        sheet.name = message.name;
+        sheet.initials = message.initials || undefined;
+        // Also update the 'name' string attribute if it exists
+        const nameAttr = sheet.attributes.find(
+          (a) => a.type === 'string' && 'code' in a && a.code === 'name'
+        );
+        if (nameAttr && nameAttr.type === 'string') {
+          nameAttr.value = message.name;
+        }
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+        // Also update sheet list
+        const sheetList = sheets.map((s) => ({ id: s.id, name: s.name, initials: s.initials }));
+        broadcast({ type: 'sheetList', sheets: sheetList });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
       }
       break;
     }
@@ -268,7 +291,7 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
           saveSheets();
           broadcast({ type: 'sheetUpdated', sheet });
           // Also update sheet list if name changed
-          const sheetList = sheets.map((s) => ({ id: s.id, name: s.name }));
+          const sheetList = sheets.map((s) => ({ id: s.id, name: s.name, initials: s.initials }));
           broadcast({ type: 'sheetList', sheets: sheetList });
         } else {
           send(ws, { type: 'error', message: 'Attribute not found' });

@@ -66,6 +66,7 @@ export type RollTemplate = RollTemplateRoll | RollTemplateHeading;
 export interface CharacterSheet {
   id: string;
   name: string;
+  initials?: string; // Optional custom 1-2 character initials for sidebar
   attributes: Attribute[];
   rollTemplates: RollTemplate[];
 }
@@ -123,6 +124,7 @@ export type ClientMessage =
   | { type: 'createSheet'; name?: string }
   | { type: 'copySheet'; sheetId: string }
   | { type: 'deleteSheet'; sheetId: string }
+  | { type: 'updateSheet'; sheetId: string; name: string; initials?: string }
   | { type: 'createAttribute'; sheetId: string; attribute: Omit<Attribute, 'id' | 'order'> }
   | { type: 'updateAttribute'; sheetId: string; attribute: Attribute }
   | { type: 'deleteAttribute'; sheetId: string; attributeId: string }
@@ -136,7 +138,7 @@ export type ClientMessage =
   | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number };
 
 export type ServerMessage =
-  | { type: 'sheetList'; sheets: { id: string; name: string }[] }
+  | { type: 'sheetList'; sheets: { id: string; name: string; initials?: string }[] }
   | { type: 'sheet'; sheet: CharacterSheet }
   | { type: 'sheetCreated'; sheet: CharacterSheet }
   | { type: 'sheetDeleted'; sheetId: string }
