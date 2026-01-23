@@ -1070,35 +1070,32 @@ input {
   animation: historySlideIn 0.3s ease-out, historyHighlight 1s ease-out 0.3s;
 }
 
-/* Super entry animation - punchy scale and glow */
-@keyframes superPop {
+/* Super upgrade animation - punchy scale when upgrading */
+@keyframes upgradePunch {
   0% {
-    opacity: 0;
-    transform: scale(0.3);
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.12);
   }
   50% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-  70% {
     transform: scale(0.95);
   }
-  85% {
+  70% {
     transform: scale(1.05);
   }
   100% {
-    opacity: 1;
     transform: scale(1);
   }
 }
 
-@keyframes superGlow {
+@keyframes upgradeGlow {
   0% {
     box-shadow:
-      0 0 30px rgba(251, 191, 36, 1),
-      0 0 60px rgba(251, 191, 36, 0.8),
-      0 0 100px rgba(251, 191, 36, 0.6),
-      inset 0 0 30px rgba(251, 191, 36, 0.2);
+      0 0 40px rgba(251, 191, 36, 1),
+      0 0 80px rgba(251, 191, 36, 0.8),
+      0 0 120px rgba(251, 191, 36, 0.6),
+      inset 0 0 40px rgba(251, 191, 36, 0.3);
   }
   100% {
     box-shadow:
@@ -1107,11 +1104,69 @@ input {
   }
 }
 
-.history-animate-super {
+@keyframes upgradeColorShift {
+  0% {
+    background: #22223a;
+    border-color: transparent;
+  }
+  30% {
+    background: linear-gradient(135deg, #3a3a4a 0%, #4a4a5a 50%, #3a3a4a 100%);
+    border-color: #fcd34d;
+  }
+  100% {
+    background: linear-gradient(135deg, #2a2a3a 0%, #32324a 50%, #2a2a3a 100%);
+    border-color: #fbbf24;
+  }
+}
+
+.history-upgrade-super {
   position: relative;
   z-index: 100;
-  animation: superPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), superGlow 1.5s ease-out;
+  animation:
+    upgradePunch 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    upgradeGlow 1.2s ease-out,
+    upgradeColorShift 0.4s ease-out forwards;
   transform-origin: center center;
+}
+
+/* Star pop-in animation */
+.super-star-placeholder {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.super-star-container {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+@keyframes starPopIn {
+  0% {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.4) rotate(10deg);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(0.9) rotate(-5deg);
+  }
+  85% {
+    transform: scale(1.1) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.super-star-animate .super-star {
+  animation: starPopIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 /* Screen flash effect */

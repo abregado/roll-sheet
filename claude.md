@@ -71,6 +71,7 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [ ] Reconnection feedback
 
 ## Small future ideas to consider
+- change the order of codes and value in the attribute list. Value should be right justified and all the way to the right, codes on the left after the name, left justified.
 - renaming of Sheets, including manually choosing the two letter initial for the sidebar
 - adding images to represent each roll template
 - Using images in the roll history to create more drama. Drag an image onto a Roll Template the upload it and add it to the roll template.
@@ -83,7 +84,8 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 - columns for attributes, so the user can have more of them side by side
 - a css style and new layout for mobile users. I mean, right now it works, but it isn't pretty or usable.
 - include carbon copy of formula used in the expanded history entry of a roll
-- a toggle at the top of the sheet to set a sheet as read only, hiding all the UI for edit mode and adding new entries. Rolling still works as normal.
+- a toggle at the top of the sheet to set a sheet as read only, hiding all the UI for edit mode and adding new entries. Rolling still works as normal. Codes are hidden when in read only mode.
+- when the server starts and detects no sheets.json, generate an empty one.
 
 ## Big new features to add
 ### Resource sheet section

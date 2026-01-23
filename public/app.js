@@ -1445,26 +1445,61 @@
 
     const el = createHistoryElement(entry, true);
 
-    // Add animation class
-    if (entry.isSuper) {
-      el.classList.add('history-animate-super');
-    } else {
-      el.classList.add('history-animate-normal');
-    }
+    // All entries start with normal slide-in animation
+    el.classList.add('history-animate-normal');
 
     elements.historyList.insertBefore(el, elements.historyList.firstChild);
 
-    // Trigger super effects after element is in DOM
+    // Remove normal animation class after it completes
+    setTimeout(() => {
+      el.classList.remove('history-animate-normal');
+    }, 400);
+
+    // For super entries, upgrade after the normal animation
     if (entry.isSuper) {
-      requestAnimationFrame(() => {
-        triggerSuperEffect(el);
-      });
+      setTimeout(() => {
+        upgradeToSuper(el);
+      }, 350); // Slight overlap for smooth transition
+    }
+  }
+
+  function upgradeToSuper(el) {
+    // Find the placeholder and replace with actual star
+    const placeholder = el.querySelector('.super-star-placeholder');
+    if (placeholder) {
+      const star = document.createElement('span');
+      star.className = 'super-star-container';
+      star.innerHTML = `
+        <svg class="super-star" width="24" height="24" viewBox="0 0 24 24" fill="#fbbf24">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+      `;
+      placeholder.replaceWith(star);
+
+      // Add the star pop animation
+      star.classList.add('super-star-animate');
     }
 
-    // Remove animation classes after they complete
+    // Add upgrade animation class
+    el.classList.add('history-upgrade-super');
+
+    // Add super styling
+    el.classList.add('history-super');
+
+    // Trigger canvas effects centered on the star
+    requestAnimationFrame(() => {
+      const star = el.querySelector('.super-star');
+      if (star) {
+        triggerSuperEffect(el, star);
+      } else {
+        triggerSuperEffect(el);
+      }
+    });
+
+    // Remove upgrade animation class after it completes
     setTimeout(() => {
-      el.classList.remove('history-animate-normal', 'history-animate-super');
-    }, 1500);
+      el.classList.remove('history-upgrade-super');
+    }, 800);
   }
 
   // ============================================================
@@ -1500,12 +1535,20 @@
     superCtx = superCanvas.getContext('2d');
   }
 
-  function triggerSuperEffect(targetEl) {
+  function triggerSuperEffect(targetEl, starEl = null) {
     ensureSuperCanvas();
 
-    const rect = targetEl.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
+    // Center on the star if provided, otherwise center on the element
+    let centerX, centerY;
+    if (starEl) {
+      const starRect = starEl.getBoundingClientRect();
+      centerX = starRect.left + starRect.width / 2;
+      centerY = starRect.top + starRect.height / 2;
+    } else {
+      const rect = targetEl.getBoundingClientRect();
+      centerX = rect.left + rect.width / 2;
+      centerY = rect.top + rect.height / 2;
+    }
 
     // Create screen flash
     createScreenFlash();
@@ -1665,24 +1708,36 @@
     const el = document.createElement('div');
     el.className = 'history-item';
 
-    // Add super class if this is a super roll
-    if (entry.isSuper) {
+    // For new super entries, we'll upgrade them after they appear
+    // For existing super entries (from history load), show them as super immediately
+    const showAsSuperImmediately = entry.isSuper && !isNew;
+
+    if (showAsSuperImmediately) {
       el.classList.add('history-super');
+    }
+
+    // Store super status for later upgrade
+    if (entry.isSuper) {
+      el.dataset.isSuper = 'true';
     }
 
     const hasDetails = entry.details.diceResults.length > 0 || entry.details.attributesUsed.length > 0;
 
-    // Star icon SVG for super entries
-    const starIcon = entry.isSuper ? `
+    // Star icon SVG - only show immediately for existing entries
+    const starIcon = showAsSuperImmediately ? `
       <svg class="super-star" width="24" height="24" viewBox="0 0 24 24" fill="#fbbf24">
         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
       </svg>
     ` : '';
 
+    // Placeholder for star that will be added during upgrade
+    const starPlaceholder = (entry.isSuper && isNew) ? '<span class="super-star-placeholder"></span>' : '';
+
     el.innerHTML = `
       <div class="history-header">
         <div class="history-display">${escapeHtml(entry.displayText)}</div>
         ${starIcon}
+        ${starPlaceholder}
         ${hasDetails ? `
           <button class="history-toggle" aria-expanded="false" aria-label="Show details">
             <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
