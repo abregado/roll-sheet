@@ -7,6 +7,8 @@ title: Roll Sheet Documentation
 
 Roll Sheet is a web application for tracking TTRPG character attributes and rolling dice online with real-time synchronization across all connected players.
 
+![Roll Sheet Screenshot](assets/screenshot.png)
+
 ---
 
 ## Documentation

@@ -2,6 +2,8 @@
 
 A web app for tracking TTRPG character attributes and rolling dice online with real-time synchronization.
 
+![Roll Sheet Screenshot](docs/assets/screenshot.png)
+
 ## Features
 
 - **Character Sheets** - Create and manage multiple character sheets with custom attributes
