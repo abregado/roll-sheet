@@ -28,7 +28,7 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [x] Integer attributes
   - [x] Derived attributes with formula evaluation (`+`, `-`, `*`, `/`, `()`, `ceil()`, `floor()`)
   - [x] Heading dividers with collapse/expand
-  - [x] Compact single-line display (Name | Value | @code)
+  - [x] Compact single-line display (Name | @code | Value)
   - [x] Edit mode with cog icon (visible on hover)
   - [x] Save (Enter/checkmark), Cancel (Escape/X), Delete (trash)
   - [x] Drag-and-drop reordering
@@ -37,6 +37,11 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [x] Warning icon for invalid derived formulas (view mode)
   - [x] Live formula validation in edit mode
   - [x] Letter-based auto-naming (text_a, text_b, ... text_z, text_aa, etc.)
+- [x] **Sheet Management**
+  - [x] Sheet renaming with custom 1-2 character initials for sidebar
+  - [x] Read-only mode toggle (lock icon, client-side preference)
+  - [x] New sheets start empty (no default attributes)
+  - [x] Sheets default to read-only when switching; new sheets default to unlocked
 - [x] **Roll Templates UI**
   - [x] Create/edit/delete roll templates
   - [x] Compact single-line view mode (Name | Roll button)
@@ -71,20 +76,13 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [ ] Reconnection feedback
 
 ## Small future ideas to consider
-- change the order of codes and value in the attribute list. Value should be right justified and all the way to the right, codes on the left after the name, left justified.
-- renaming of Sheets, including manually choosing the two letter initial for the sidebar
 - adding images to represent each roll template
 - Using images in the roll history to create more drama. Drag an image onto a Roll Template the upload it and add it to the roll template.
-- For roll templates, a conditional for triggering a super entry in the history (like a critical hit, {result} >= 20)
 - support for multiple {results} using square brackets in dice formula ("[1d20][1d20]" gives {result} and {result2})
 - css customization per sheet via a paint icon at the bottom of the sheet. Has several premade css styles to choose from (Light, Dark, Retro, Paper)
 - support for dragging the divider between sheet and history to change the width of the columns
-- animated transition when a new entry is added to the history, to give notificaton that something happened.
-- super transitions when a super result was rolled
 - columns for attributes, so the user can have more of them side by side
 - a css style and new layout for mobile users. I mean, right now it works, but it isn't pretty or usable.
-- include carbon copy of formula used in the expanded history entry of a roll
-- a toggle at the top of the sheet to set a sheet as read only, hiding all the UI for edit mode and adding new entries. Rolling still works as normal. Codes are hidden when in read only mode.
 - when the server starts and detects no sheets.json, generate an empty one.
 
 ## Big new features to add
@@ -100,11 +98,20 @@ Selectable shapes for the resource pips (circle, star, triangle, ect) color and 
 
 Stored on the server, accessible by anyone. Each sheet contains:
 
+- **Sheet Name**: Displayed at the top; click pencil icon to rename
+  - Custom 1-2 character initials can be set for the sidebar icon
+  - The sheet name is used for `{name}` in display formats
+
+- **Read-Only Mode**: Lock icon in top-right toggles read-only mode (client-side only)
+  - When locked: hides edit UI, drag handles, add buttons, and attribute codes
+  - Rolling still works in read-only mode
+  - Sheets default to locked when switching; new sheets default to unlocked
+
 - **Attributes**: Named values with a code for roll references
   - Types: `string`, `integer`, `derived`, or `heading`
   - Example: Name="Dexterity", Code="dex", Type=integer, Value=3
-  - New sheets start with one string attribute: Name (code: `name`)
-  - Compact single-line display: Name | Value | @code
+  - New sheets start empty (no default attributes)
+  - Compact single-line display: Name | @code | Value (value right-justified)
   - Attributes are non-editable by default; click cog icon (visible on hover) to edit
   - Edit mode: Enter to save, Escape to cancel
   - Drag handle on left side for reordering
@@ -151,7 +158,9 @@ Stored on the server, accessible by anyone. Each sheet contains:
 
 - In roll formulas: `@code` (e.g., `1d20+@str`)
 - In display format: `{code}` (e.g., `"{name} rolled {result}"`)
-- Special: `{result}` = final roll total
+- Special placeholders:
+  - `{result}` = final roll total
+  - `{name}` = sheet name (reserved, cannot be used as attribute code)
 
 ### History
 
@@ -166,26 +175,27 @@ Stored on the server, accessible by anyone. Each sheet contains:
 ## UI Layout
 
 ```
-+--------+-------------------------+------------------+
-| Sheet  |    Character Sheet      |     History      |
-| Icons  |                         |                  |
-|        | [Attributes Section]    | [Roll entries    |
-| [S1]   |   STATS (heading)       |  with detailed   |
-| [S2]   |     Strength    5 @str  |  breakdowns]     |
-| [S3]   |     Dexterity   3 @dex  |                  |
-|        |                         |                  |
-| [+]    | [Roll Templates]        |                  |
-|        |   Attack Roll    [Roll] |                  |
-|        |   Damage Roll    [Roll] | [Clear History]  |
-|        |                         |                  |
-|        | [Copy] [Delete Sheet]   |                  |
-+--------+-------------------------+------------------+
++--------+------------------------------+------------------+
+| Sheet  |  Sheet Name        [✏️] [🔒] |     History      |
+| Icons  |                              |                  |
+|        | [Attributes Section]         | [Roll entries    |
+| [S1]   |   STATS (heading)            |  with detailed   |
+| [S2]   |     Strength  @str        5  |  breakdowns]     |
+| [S3]   |     Dexterity @dex        3  |                  |
+|        |                              |                  |
+| [+]    | [Roll Templates]             |                  |
+|        |   Attack Roll         [Roll] |                  |
+|        |   Damage Roll         [Roll] | [Clear History]  |
+|        |                              |                  |
+|        | [Copy] [Delete Sheet]        |                  |
++--------+------------------------------+------------------+
 ```
 
 - Two-column layout on desktop (sheet + history)
 - Responsive to window size changes
 - Sheet selector: vertical icon sidebar left of Character Sheet
 - Plus icon to add new sheet
+- Sheet header with name, pencil (rename), and lock (read-only toggle)
 - Copy/Delete Sheet buttons at bottom (delete requires confirmation)
 
 ## Real-time Sync
@@ -200,7 +210,7 @@ Stored on the server, accessible by anyone. Each sheet contains:
 - Roll Templates with missing attribute codes show warning (red/icon)
 - Invalid Roll Templates cannot be rolled
 - Attribute codes must be unique within a sheet
-- Reserved codes (`result`, `maximum`, `minimum`) cannot be used as attribute codes
+- Reserved codes (`result`, `maximum`, `minimum`, `name`) cannot be used as attribute codes
 
 ## Super Conditions
 
