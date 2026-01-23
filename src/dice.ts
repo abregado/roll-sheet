@@ -374,6 +374,44 @@ export function evaluateFormula(
 /**
  * Resolve display format string
  */
+/**
+ * Evaluate a super condition (e.g., "{result} >= 20")
+ * Supports comparison operators: >=, <=, >, <, ==
+ */
+export function evaluateSuperCondition(condition: string, total: number): boolean {
+  if (!condition || !condition.trim()) {
+    return false;
+  }
+
+  // Replace {result} with the total
+  let expr = condition.replace(/\{result\}/gi, total.toString());
+
+  // Match pattern: number operator number
+  const match = expr.match(/^\s*(\d+(?:\.\d+)?)\s*(>=|<=|>|<|==)\s*(\d+(?:\.\d+)?)\s*$/);
+  if (!match) {
+    return false;
+  }
+
+  const left = parseFloat(match[1]);
+  const operator = match[2];
+  const right = parseFloat(match[3]);
+
+  switch (operator) {
+    case '>=':
+      return left >= right;
+    case '<=':
+      return left <= right;
+    case '>':
+      return left > right;
+    case '<':
+      return left < right;
+    case '==':
+      return left === right;
+    default:
+      return false;
+  }
+}
+
 export function resolveDisplayFormat(
   format: string,
   attributes: Attribute[],
@@ -458,6 +496,11 @@ export function executeRoll(
     total,
   };
 
+  // Check super condition
+  const isSuper = template.superCondition
+    ? evaluateSuperCondition(template.superCondition, total)
+    : false;
+
   return {
     id: generateId(),
     timestamp: Date.now(),
@@ -466,5 +509,6 @@ export function executeRoll(
     templateName: template.name + (template.formulas.length > 1 ? ` (${formulaVariant.title})` : ''),
     displayText,
     details,
+    isSuper,
   };
 }

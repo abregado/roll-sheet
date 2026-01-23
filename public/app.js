@@ -1041,6 +1041,7 @@
     const formulasList = el.querySelector('.template-formulas-list');
     const addFormulaBtn = el.querySelector('.add-formula-btn');
     const formatInput = el.querySelector('.edit-template-format');
+    const superInput = el.querySelector('.edit-template-super');
     const errorEl = el.querySelector('.template-validation-error');
     const saveBtn = el.querySelector('.save-btn');
     const cancelBtn = el.querySelector('.cancel-btn');
@@ -1048,6 +1049,7 @@
 
     nameInput.value = template.name;
     formatInput.value = template.displayFormat || '';
+    superInput.value = template.superCondition || '';
 
     // Track formulas in edit state
     let editFormulas = template.formulas ? [...template.formulas] : [{ title: '', formula: '1d20' }];
@@ -1085,7 +1087,7 @@
       const handleKeyDown = (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value);
+          saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value, superInput.value);
         } else if (e.key === 'Escape') {
           e.preventDefault();
           exitTemplateEditMode();
@@ -1135,7 +1137,7 @@
     const handleMainKeyDown = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value);
+        saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value, superInput.value);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         exitTemplateEditMode();
@@ -1143,9 +1145,10 @@
     };
     nameInput.addEventListener('keydown', handleMainKeyDown);
     formatInput.addEventListener('keydown', handleMainKeyDown);
+    superInput.addEventListener('keydown', handleMainKeyDown);
 
     saveBtn.addEventListener('click', () => {
-      saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value);
+      saveTemplateWithFormulas(template.id, nameInput.value, editFormulas, formatInput.value, superInput.value);
     });
 
     cancelBtn.addEventListener('click', () => exitTemplateEditMode());
@@ -1172,7 +1175,7 @@
     renderTemplates();
   }
 
-  function saveTemplateWithFormulas(id, name, formulas, displayFormat) {
+  function saveTemplateWithFormulas(id, name, formulas, displayFormat, superCondition) {
     if (!name.trim()) {
       alert('Name is required');
       return;
@@ -1197,6 +1200,7 @@
       name: name.trim(),
       formulas: cleanedFormulas,
       displayFormat: (displayFormat || '').trim(),
+      superCondition: (superCondition || '').trim(),
     };
 
     send({ type: 'updateRollTemplate', sheetId: currentSheetId, template: updatedTemplate });
@@ -1439,19 +1443,246 @@
       emptyState.remove();
     }
 
-    const el = createHistoryElement(entry);
+    const el = createHistoryElement(entry, true);
+
+    // Add animation class
+    if (entry.isSuper) {
+      el.classList.add('history-animate-super');
+    } else {
+      el.classList.add('history-animate-normal');
+    }
+
     elements.historyList.insertBefore(el, elements.historyList.firstChild);
+
+    // Trigger super effects after element is in DOM
+    if (entry.isSuper) {
+      requestAnimationFrame(() => {
+        triggerSuperEffect(el);
+      });
+    }
+
+    // Remove animation classes after they complete
+    setTimeout(() => {
+      el.classList.remove('history-animate-normal', 'history-animate-super');
+    }, 1500);
   }
 
-  function createHistoryElement(entry) {
+  // ============================================================
+  // Super Effect Canvas System
+  // ============================================================
+
+  let superCanvas = null;
+  let superCtx = null;
+
+  function ensureSuperCanvas() {
+    if (superCanvas) return;
+
+    superCanvas = document.createElement('canvas');
+    superCanvas.id = 'super-effect-canvas';
+    superCanvas.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 10000;
+    `;
+    document.body.appendChild(superCanvas);
+
+    const resize = () => {
+      superCanvas.width = window.innerWidth;
+      superCanvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    superCtx = superCanvas.getContext('2d');
+  }
+
+  function triggerSuperEffect(targetEl) {
+    ensureSuperCanvas();
+
+    const rect = targetEl.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Create screen flash
+    createScreenFlash();
+
+    // Create particle burst
+    const particles = [];
+    const particleCount = 40;
+
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.3;
+      const speed = 8 + Math.random() * 12;
+      const size = 4 + Math.random() * 8;
+      const colors = ['#fbbf24', '#f59e0b', '#fcd34d', '#fde68a', '#ffffff'];
+
+      particles.push({
+        x: centerX,
+        y: centerY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: size,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        life: 1,
+        decay: 0.015 + Math.random() * 0.01,
+        gravity: 0.15,
+      });
+    }
+
+    // Create starburst rays
+    const rays = [];
+    const rayCount = 12;
+
+    for (let i = 0; i < rayCount; i++) {
+      const angle = (Math.PI * 2 * i) / rayCount;
+      rays.push({
+        angle: angle,
+        length: 0,
+        maxLength: 150 + Math.random() * 100,
+        width: 3 + Math.random() * 4,
+        speed: 15 + Math.random() * 10,
+        life: 1,
+        decay: 0.025,
+      });
+    }
+
+    // Create sparkle trail particles
+    const sparkles = [];
+    for (let i = 0; i < 30; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * 60;
+      sparkles.push({
+        x: centerX + Math.cos(angle) * distance,
+        y: centerY + Math.sin(angle) * distance,
+        size: 2 + Math.random() * 4,
+        life: 0.5 + Math.random() * 0.5,
+        decay: 0.02 + Math.random() * 0.02,
+        twinkle: Math.random() * Math.PI * 2,
+      });
+    }
+
+    let animationId;
+    const animate = () => {
+      superCtx.clearRect(0, 0, superCanvas.width, superCanvas.height);
+
+      let hasActiveElements = false;
+
+      // Draw rays
+      rays.forEach(ray => {
+        if (ray.life <= 0) return;
+        hasActiveElements = true;
+
+        ray.length = Math.min(ray.length + ray.speed, ray.maxLength);
+        ray.life -= ray.decay;
+
+        const endX = centerX + Math.cos(ray.angle) * ray.length;
+        const endY = centerY + Math.sin(ray.angle) * ray.length;
+
+        const gradient = superCtx.createLinearGradient(centerX, centerY, endX, endY);
+        gradient.addColorStop(0, `rgba(251, 191, 36, ${ray.life * 0.8})`);
+        gradient.addColorStop(0.5, `rgba(253, 230, 138, ${ray.life * 0.6})`);
+        gradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
+
+        superCtx.beginPath();
+        superCtx.moveTo(centerX, centerY);
+        superCtx.lineTo(endX, endY);
+        superCtx.strokeStyle = gradient;
+        superCtx.lineWidth = ray.width * ray.life;
+        superCtx.lineCap = 'round';
+        superCtx.stroke();
+      });
+
+      // Draw particles
+      particles.forEach(p => {
+        if (p.life <= 0) return;
+        hasActiveElements = true;
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.vx *= 0.98;
+        p.life -= p.decay;
+
+        superCtx.beginPath();
+        superCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        superCtx.fillStyle = p.color;
+        superCtx.globalAlpha = p.life;
+        superCtx.fill();
+        superCtx.globalAlpha = 1;
+      });
+
+      // Draw sparkles
+      sparkles.forEach(s => {
+        if (s.life <= 0) return;
+        hasActiveElements = true;
+
+        s.life -= s.decay;
+        s.twinkle += 0.3;
+
+        const twinkleAlpha = (Math.sin(s.twinkle) + 1) / 2;
+        const alpha = s.life * twinkleAlpha;
+
+        superCtx.beginPath();
+        superCtx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        superCtx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        superCtx.fill();
+
+        // Draw 4-point star shape
+        superCtx.beginPath();
+        const starSize = s.size * 2;
+        superCtx.moveTo(s.x - starSize, s.y);
+        superCtx.lineTo(s.x + starSize, s.y);
+        superCtx.moveTo(s.x, s.y - starSize);
+        superCtx.lineTo(s.x, s.y + starSize);
+        superCtx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+        superCtx.lineWidth = 1;
+        superCtx.stroke();
+      });
+
+      if (hasActiveElements) {
+        animationId = requestAnimationFrame(animate);
+      } else {
+        superCtx.clearRect(0, 0, superCanvas.width, superCanvas.height);
+      }
+    };
+
+    animate();
+  }
+
+  function createScreenFlash() {
+    const flash = document.createElement('div');
+    flash.className = 'super-screen-flash';
+    document.body.appendChild(flash);
+
+    setTimeout(() => flash.remove(), 500);
+  }
+
+  function createHistoryElement(entry, isNew = false) {
     const el = document.createElement('div');
     el.className = 'history-item';
 
+    // Add super class if this is a super roll
+    if (entry.isSuper) {
+      el.classList.add('history-super');
+    }
+
     const hasDetails = entry.details.diceResults.length > 0 || entry.details.attributesUsed.length > 0;
+
+    // Star icon SVG for super entries
+    const starIcon = entry.isSuper ? `
+      <svg class="super-star" width="24" height="24" viewBox="0 0 24 24" fill="#fbbf24">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+      </svg>
+    ` : '';
 
     el.innerHTML = `
       <div class="history-header">
         <div class="history-display">${escapeHtml(entry.displayText)}</div>
+        ${starIcon}
         ${hasDetails ? `
           <button class="history-toggle" aria-expanded="false" aria-label="Show details">
             <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1462,6 +1693,7 @@
       </div>
       ${hasDetails ? `
         <div class="history-details" hidden>
+          <div class="roll-formula">Formula: <code>${escapeHtml(entry.details.formula)}</code></div>
           <div class="roll-breakdown">${formatRollBreakdown(entry.details)}</div>
           ${entry.details.attributesUsed.length > 0 ? `
             <div class="attributes-used">

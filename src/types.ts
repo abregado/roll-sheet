@@ -52,6 +52,7 @@ export interface RollTemplateRoll extends BaseRollTemplate {
   type: 'roll';
   formulas: RollFormula[];
   displayFormat: string;
+  superCondition?: string; // e.g., "{result} >= 20"
 }
 
 export interface RollTemplateHeading extends BaseRollTemplate {
@@ -78,6 +79,7 @@ export interface HistoryEntry {
   templateName: string;
   displayText: string;
   details: RollDetails;
+  isSuper?: boolean; // true if super condition was met
 }
 
 export interface RollDetails {
