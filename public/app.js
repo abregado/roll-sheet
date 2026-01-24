@@ -782,6 +782,22 @@
     return String.fromCharCode(97 + first) + String.fromCharCode(97 + second);
   }
 
+  // Generate a unique name for duplicating by adding _a, _b, _c suffixes
+  function generateUniqueName(baseName, existingNames) {
+    // Strip any existing _X suffix from the base name
+    const baseWithoutSuffix = baseName.replace(/_[a-z]+$/, '');
+
+    let suffixIndex = 0;
+    let newName;
+    do {
+      const suffix = generateLetterSuffix(suffixIndex);
+      newName = baseWithoutSuffix + '_' + suffix;
+      suffixIndex++;
+    } while (existingNames.includes(newName));
+
+    return newName;
+  }
+
   function addAttribute(type) {
     if (type === 'heading') {
       addHeading();
@@ -1255,6 +1271,7 @@
     const errorEl = el.querySelector('.template-validation-error');
     const saveBtn = el.querySelector('.save-btn');
     const cancelBtn = el.querySelector('.cancel-btn');
+    const copyBtn = el.querySelector('.copy-btn');
     const deleteBtn = el.querySelector('.delete-btn');
 
     nameInput.value = template.name;
@@ -1362,6 +1379,7 @@
     });
 
     cancelBtn.addEventListener('click', () => exitTemplateEditMode());
+    copyBtn.addEventListener('click', () => duplicateTemplate(template.id));
     deleteBtn.addEventListener('click', () => deleteTemplate(template.id));
 
     // Initial render
@@ -1422,6 +1440,30 @@
       send({ type: 'deleteRollTemplate', sheetId: currentSheetId, templateId: id });
       exitTemplateEditMode();
     }
+  }
+
+  function duplicateTemplate(id) {
+    const template = currentSheet.rollTemplates.find(t => t.id === id);
+    if (!template || template.type !== 'roll') return;
+
+    // Generate unique name
+    const existingNames = currentSheet.rollTemplates.map(t => t.name);
+    const newName = generateUniqueName(template.name, existingNames);
+
+    // Create duplicate template data (without id and order - server will assign)
+    const duplicateData = {
+      type: 'roll',
+      name: newName,
+      formulas: JSON.parse(JSON.stringify(template.formulas)),
+      displayFormat: template.displayFormat,
+      superCondition: template.superCondition,
+    };
+
+    // Exit edit mode first
+    exitTemplateEditMode();
+
+    // Send create request - server will place it at the end, we'll reorder after
+    send({ type: 'createRollTemplate', sheetId: currentSheetId, template: duplicateData });
   }
 
   function addRollTemplate() {
@@ -1792,6 +1834,7 @@
     const colorInput = el.querySelector('.edit-resource-color');
     const saveBtn = el.querySelector('.save-btn');
     const cancelBtn = el.querySelector('.cancel-btn');
+    const copyBtn = el.querySelector('.copy-btn');
     const deleteBtn = el.querySelector('.delete-btn');
 
     nameInput.value = resource.name;
@@ -1835,6 +1878,7 @@
     });
 
     cancelBtn.addEventListener('click', () => exitResourceEditMode());
+    copyBtn.addEventListener('click', () => duplicateResource(resource.id));
     deleteBtn.addEventListener('click', () => deleteResource(resource.id));
 
     // Focus name input
@@ -1935,6 +1979,32 @@
       send({ type: 'deleteResource', sheetId: currentSheetId, resourceId: id });
       exitResourceEditMode();
     }
+  }
+
+  function duplicateResource(id) {
+    const resources = currentSheet.resources || [];
+    const resource = resources.find(r => r.id === id);
+    if (!resource || resource.type !== 'resource') return;
+
+    // Generate unique name
+    const existingNames = resources.map(r => r.name);
+    const newName = generateUniqueName(resource.name, existingNames);
+
+    // Create duplicate resource data (without id and order - server will assign)
+    const duplicateData = {
+      type: 'resource',
+      name: newName,
+      maximum: resource.maximum,
+      current: resource.current,
+      shape: resource.shape,
+      color: resource.color,
+    };
+
+    // Exit edit mode first
+    exitResourceEditMode();
+
+    // Send create request
+    send({ type: 'createResource', sheetId: currentSheetId, resource: duplicateData });
   }
 
   function addResource() {

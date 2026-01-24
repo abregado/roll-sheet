@@ -562,6 +562,7 @@ input {
 
 .save-btn,
 .cancel-btn,
+.copy-btn,
 .delete-btn {
   background: none;
   border: none;
@@ -585,6 +586,14 @@ input {
 .cancel-btn:hover {
   color: #fff;
   background-color: rgba(255, 255, 255, 0.1);
+}
+
+.copy-btn {
+  color: #6366f1;
+}
+
+.copy-btn:hover {
+  background-color: rgba(99, 102, 241, 0.1);
 }
 
 .delete-btn {
