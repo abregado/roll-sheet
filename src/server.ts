@@ -10,6 +10,7 @@ import {
   HistoryEntry,
   ClientMessage,
   ServerMessage,
+  ExportedSheet,
 } from './types';
 import { executeRoll, isReservedCode } from './dice';
 
@@ -170,6 +171,38 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
       sheets.push(newSheet);
       saveSheets();
       broadcast({ type: 'sheetCreated', sheet: newSheet });
+      break;
+    }
+
+    case 'importSheet': {
+      const sheetData = message.sheetData;
+
+      // Validate basic structure
+      if (!sheetData || typeof sheetData.name !== 'string') {
+        send(ws, { type: 'error', message: 'Invalid sheet data: name is required' });
+        break;
+      }
+
+      // Create new sheet with imported data
+      const importedSheet: CharacterSheet = {
+        id: generateId(),
+        name: sheetData.name,
+        initials: sheetData.initials,
+        attributes: (sheetData.attributes || []).map((attr, index) => ({
+          ...attr,
+          id: generateId(),
+          order: index,
+        } as Attribute)),
+        rollTemplates: (sheetData.rollTemplates || []).map((tmpl, index) => ({
+          ...tmpl,
+          id: generateId(),
+          order: index,
+        } as RollTemplate)),
+      };
+
+      sheets.push(importedSheet);
+      saveSheets();
+      broadcast({ type: 'sheetCreated', sheet: importedSheet });
       break;
     }
 

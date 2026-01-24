@@ -84,7 +84,7 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 - when the server starts and detects no sheets.json, generate an empty one.
 - when making a new derived value, default to no formula. But if a derived value has no formula, its value evaluates to zero. This is so that when a user makes a new derived attribute and then edits it, they see the default text in the formula box
 - new formula variant prefabs button to add Advantage/Disadvantage quickly
-- export character sheet data to text file button
+- export character sheet data to text file button at the bottom of each sheet
 - import character sheet data by dropping text file on the + sheet button.
 - roll template buttons should not have split styles when there is only a single formula variant
 - in the roll breakdown of history entries, show the code of the attributes used (eg: // 3 (@str)) inside the formula (eg:// 2d20dl: [3, 7] = 7 + 3 (@str) = 10)
@@ -92,7 +92,7 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 ## Big new features to add
 ### Resource sheet section
 New section for sheets to track resources like HP, Ability charges, Spell tokens. Should be generic just like everything else but have nice UX.
-Selectable shapes for the resource pips (circle, star, triangle, ect) color and icon also customizable. Click pips to fill or empty them.
+Selectable shapes for the resource pips (polyhedral dice representations, circle, star, triangle, ect) color and icon also customizable. Click pips to fill or empty them.
 
 ### Sheet style and visual customization
 Roleplaying games are all about personalization. We need solid options for the user to customize how their sheet looks, and which vibe it portrays.
@@ -117,7 +117,7 @@ Some ideas would include:
 - maybe swipe sideways to swap the bottom section between attributes and roll templates
 
 ### Roll tables
-For generating random words and numbers.
+For generating random words and numbers. These can be used in display formulas.
 
 ---
 

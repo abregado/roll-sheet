@@ -100,6 +100,12 @@ input {
   background-color: rgba(99, 102, 241, 0.1);
 }
 
+.sheet-icon.add-sheet.drag-over {
+  background-color: rgba(99, 102, 241, 0.25);
+  border-color: #818cf8;
+  transform: scale(1.1);
+}
+
 /* Character Sheet */
 .character-sheet {
   padding: 1.5rem;

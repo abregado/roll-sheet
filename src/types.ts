@@ -118,10 +118,19 @@ export interface ParsedFormula {
 }
 
 // WebSocket Messages
+// Exported sheet format (for import/export)
+export interface ExportedSheet {
+  name: string;
+  initials?: string;
+  attributes: Omit<Attribute, 'id' | 'order'>[];
+  rollTemplates: Omit<RollTemplate, 'id' | 'order'>[];
+}
+
 export type ClientMessage =
   | { type: 'getSheets' }
   | { type: 'getSheet'; sheetId: string }
   | { type: 'createSheet'; name?: string }
+  | { type: 'importSheet'; sheetData: ExportedSheet }
   | { type: 'copySheet'; sheetId: string }
   | { type: 'deleteSheet'; sheetId: string }
   | { type: 'updateSheet'; sheetId: string; name: string; initials?: string }

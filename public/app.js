@@ -39,6 +39,7 @@
     templatesList: document.getElementById('templates-list'),
     addTemplateBtn: document.getElementById('add-template-btn'),
     addTemplateHeadingBtn: document.getElementById('add-template-heading-btn'),
+    exportSheetBtn: document.getElementById('export-sheet-btn'),
     copySheetBtn: document.getElementById('copy-sheet-btn'),
     deleteSheetBtn: document.getElementById('delete-sheet-btn'),
     historyList: document.getElementById('history-list'),
@@ -303,6 +304,73 @@
     if (currentSheetId) {
       send({ type: 'copySheet', sheetId: currentSheetId });
     }
+  }
+
+  function exportSheet() {
+    if (!currentSheet) return;
+
+    // Create export data (without internal IDs and order - those will be regenerated on import)
+    const exportData = {
+      name: currentSheet.name,
+      initials: currentSheet.initials,
+      attributes: currentSheet.attributes.map(attr => {
+        // Remove id and order, keeping the rest
+        const { id, order, ...rest } = attr;
+        return rest;
+      }),
+      rollTemplates: currentSheet.rollTemplates.map(tmpl => {
+        const { id, order, ...rest } = tmpl;
+        return rest;
+      }),
+    };
+
+    // Create and download the JSON file
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentSheet.name.replace(/[^a-z0-9]/gi, '_')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function importSheet(file) {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const sheetData = JSON.parse(e.target.result);
+
+        // Basic validation
+        if (!sheetData.name || typeof sheetData.name !== 'string') {
+          alert('Invalid sheet file: missing or invalid name');
+          return;
+        }
+
+        // Ensure arrays exist
+        if (!Array.isArray(sheetData.attributes)) {
+          sheetData.attributes = [];
+        }
+        if (!Array.isArray(sheetData.rollTemplates)) {
+          sheetData.rollTemplates = [];
+        }
+
+        send({ type: 'importSheet', sheetData });
+      } catch (err) {
+        alert('Failed to parse sheet file. Please ensure it is a valid JSON file.');
+        console.error('Import error:', err);
+      }
+    };
+
+    reader.onerror = () => {
+      alert('Failed to read file.');
+    };
+
+    reader.readAsText(file);
   }
 
   function deleteSheet() {
@@ -1930,8 +1998,39 @@
 
   function setupEventListeners() {
     elements.addSheetBtn.addEventListener('click', createSheet);
+    elements.exportSheetBtn.addEventListener('click', exportSheet);
     elements.copySheetBtn.addEventListener('click', copySheet);
     elements.deleteSheetBtn.addEventListener('click', deleteSheet);
+
+    // Import sheet via drag and drop on the + button
+    elements.addSheetBtn.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      elements.addSheetBtn.classList.add('drag-over');
+    });
+
+    elements.addSheetBtn.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      elements.addSheetBtn.classList.remove('drag-over');
+    });
+
+    elements.addSheetBtn.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      elements.addSheetBtn.classList.remove('drag-over');
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        // Accept JSON or plain text files
+        if (file.type === 'application/json' || file.type === 'text/plain' || file.name.endsWith('.json')) {
+          importSheet(file);
+        } else {
+          alert('Please drop a JSON file to import a character sheet.');
+        }
+      }
+    });
     elements.deleteCancelBtn.addEventListener('click', cancelDeleteSheet);
     elements.deleteConfirmBtn.addEventListener('click', confirmDeleteSheet);
     elements.clearHistoryBtn.addEventListener('click', clearHistory);
