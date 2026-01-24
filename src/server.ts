@@ -7,6 +7,7 @@ import {
   Attribute,
   RollTemplate,
   RollTemplateRoll,
+  Resource,
   HistoryEntry,
   ClientMessage,
   ServerMessage,
@@ -85,6 +86,7 @@ function createDefaultSheet(name?: string): CharacterSheet {
     name: name || 'New Character',
     attributes: [],
     rollTemplates: [],
+    resources: [],
   };
 }
 
@@ -198,6 +200,11 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
           id: generateId(),
           order: index,
         } as RollTemplate)),
+        resources: (sheetData.resources || []).map((res, index) => ({
+          ...res,
+          id: generateId(),
+          order: index,
+        } as Resource)),
       };
 
       sheets.push(importedSheet);
@@ -214,13 +221,17 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
           id: generateId(),
           name: sourceSheet.name + ' (Copy)',
         };
-        // Generate new IDs for attributes and templates
+        // Generate new IDs for attributes, templates, and resources
         copiedSheet.attributes = copiedSheet.attributes.map((attr) => ({
           ...attr,
           id: generateId(),
         }));
         copiedSheet.rollTemplates = copiedSheet.rollTemplates.map((tmpl) => ({
           ...tmpl,
+          id: generateId(),
+        }));
+        copiedSheet.resources = (copiedSheet.resources || []).map((res) => ({
+          ...res,
           id: generateId(),
         }));
         sheets.push(copiedSheet);
@@ -425,6 +436,80 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
           }
         });
         sheet.rollTemplates.sort((a, b) => a.order - b.order);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'createResource': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!sheet.resources) sheet.resources = [];
+        const maxOrder = sheet.resources.reduce((max, res) => Math.max(max, res.order), -1);
+        const newResource = {
+          ...message.resource,
+          id: generateId(),
+          order: maxOrder + 1,
+        } as Resource;
+        sheet.resources.push(newResource);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'updateResource': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!sheet.resources) sheet.resources = [];
+        const resIndex = sheet.resources.findIndex((r) => r.id === message.resource.id);
+        if (resIndex !== -1) {
+          sheet.resources[resIndex] = message.resource;
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Resource not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'deleteResource': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!sheet.resources) sheet.resources = [];
+        const resIndex = sheet.resources.findIndex((r) => r.id === message.resourceId);
+        if (resIndex !== -1) {
+          sheet.resources.splice(resIndex, 1);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Resource not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'reorderResources': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!sheet.resources) sheet.resources = [];
+        message.resourceIds.forEach((id, index) => {
+          const resource = sheet.resources.find((r) => r.id === id);
+          if (resource) {
+            resource.order = index;
+          }
+        });
+        sheet.resources.sort((a, b) => a.order - b.order);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
       } else {

@@ -33,6 +33,39 @@ export interface HeadingAttribute extends BaseAttribute {
 
 export type Attribute = StringAttribute | IntegerAttribute | DerivedAttribute | HeadingAttribute;
 
+// Resource types
+export type PipShape =
+  // Basic geometric
+  | 'circle' | 'square' | 'diamond' | 'triangle' | 'hexagon' | 'star'
+  // Thematic
+  | 'heart' | 'shield' | 'skull' | 'flame' | 'lightning'
+  // Polyhedral dice
+  | 'd4' | 'd6' | 'd8' | 'd10' | 'd12' | 'd20';
+
+export type ResourceType = 'resource' | 'heading';
+
+export interface BaseResource {
+  id: string;
+  name: string;
+  type: ResourceType;
+  order: number;
+}
+
+export interface ResourceItem extends BaseResource {
+  type: 'resource';
+  maximum: number;
+  current: number;
+  shape: PipShape;
+  color: string; // hex color like "#6366f1"
+}
+
+export interface ResourceHeading extends BaseResource {
+  type: 'heading';
+  collapsed: boolean;
+}
+
+export type Resource = ResourceItem | ResourceHeading;
+
 // Roll Template types
 export type RollTemplateType = 'roll' | 'heading';
 
@@ -69,6 +102,7 @@ export interface CharacterSheet {
   initials?: string; // Optional custom 1-2 character initials for sidebar
   attributes: Attribute[];
   rollTemplates: RollTemplate[];
+  resources: Resource[];
 }
 
 // History Entry
@@ -124,6 +158,7 @@ export interface ExportedSheet {
   initials?: string;
   attributes: Omit<Attribute, 'id' | 'order'>[];
   rollTemplates: Omit<RollTemplate, 'id' | 'order'>[];
+  resources?: Omit<Resource, 'id' | 'order'>[];
 }
 
 export type ClientMessage =
@@ -142,6 +177,10 @@ export type ClientMessage =
   | { type: 'updateRollTemplate'; sheetId: string; template: RollTemplate }
   | { type: 'deleteRollTemplate'; sheetId: string; templateId: string }
   | { type: 'reorderRollTemplates'; sheetId: string; templateIds: string[] }
+  | { type: 'createResource'; sheetId: string; resource: Omit<Resource, 'id' | 'order'> }
+  | { type: 'updateResource'; sheetId: string; resource: Resource }
+  | { type: 'deleteResource'; sheetId: string; resourceId: string }
+  | { type: 'reorderResources'; sheetId: string; resourceIds: string[] }
   | { type: 'getHistory' }
   | { type: 'clearHistory' }
   | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number };

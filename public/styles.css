@@ -1015,6 +1015,281 @@ input {
   background-color: rgba(99, 102, 241, 0.1);
 }
 
+/* Resources Section */
+.resources-section {
+  margin-bottom: 2rem;
+}
+
+.resources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+/* Resource Item */
+.resource-item {
+  background-color: #22223a;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  transition: background-color 0.2s ease;
+}
+
+.resource-item:hover {
+  background-color: #2a2a4a;
+}
+
+.resource-item.editing {
+  background-color: #2a2a4a;
+  border: 1px solid #6366f1;
+  display: flex;
+  flex-wrap: wrap;
+  padding: 1rem;
+}
+
+.resource-item.dragging {
+  opacity: 0.5;
+  background-color: #3a3a5a;
+}
+
+.resource-item.drag-over {
+  border-top: 2px solid #6366f1;
+}
+
+.resource-item.indented {
+  margin-left: 1.5rem;
+}
+
+.resource-item.indented.collapsed {
+  display: none;
+}
+
+.resource-item:hover .edit-btn {
+  opacity: 1;
+}
+
+.resource-name {
+  font-weight: 500;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Resource Heading */
+.resource-heading-item {
+  background-color: transparent;
+  padding: 0.75rem 0.5rem 0.25rem 0.5rem;
+  margin-top: 0.5rem;
+  border-bottom: 1px solid #3a3a5a;
+  border-radius: 0;
+  grid-template-columns: auto auto 1fr auto;
+}
+
+.resource-heading-item:first-child {
+  margin-top: 0;
+}
+
+.resource-heading-item:hover {
+  background-color: transparent;
+}
+
+.resource-heading-item.editing {
+  background-color: #2a2a4a;
+  border-radius: 6px;
+  border: 1px solid #6366f1;
+  border-bottom: 1px solid #6366f1;
+  padding: 0.5rem 0.75rem;
+}
+
+.resource-heading-item.collapsed .collapse-btn .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.resource-heading-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.edit-resource-heading-name {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  background-color: #1a1a2e;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.edit-resource-heading-name:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+/* Resource Edit Mode */
+.resource-edit-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.resource-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.edit-resource-name {
+  flex: 1;
+}
+
+.edit-resource-max {
+  width: 70px;
+  text-align: center;
+}
+
+.edit-resource-color {
+  width: 36px;
+  height: 36px;
+  padding: 2px;
+  border: 2px solid #3a3a5a;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.edit-resource-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.edit-resource-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+/* Pips Container */
+.pips-container {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pip {
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--pip-color, #6366f1);
+  transition: transform 0.1s ease, opacity 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pip:hover {
+  transform: scale(1.2);
+}
+
+.pip:active {
+  transform: scale(0.95);
+}
+
+.pip svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pip.filled svg {
+  fill: var(--pip-color, #6366f1);
+  stroke: var(--pip-color, #6366f1);
+  stroke-width: 0;
+}
+
+.pip.empty svg {
+  fill: none;
+  stroke: var(--pip-color, #6366f1);
+  stroke-width: 2;
+}
+
+/* Shape Selector */
+.shape-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.shape-option {
+  width: 32px;
+  height: 32px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: #1a1a2e;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  transition: all 0.15s ease;
+}
+
+.shape-option:hover {
+  background: #2a2a4a;
+  color: #ccc;
+}
+
+.shape-option.selected {
+  border-color: #6366f1;
+  color: #6366f1;
+}
+
+.shape-option svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+/* Add resource controls */
+.add-resource-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.add-resource-controls .add-btn {
+  flex: 1;
+}
+
+/* Read-only mode for resources - hide edit UI but keep pips clickable */
+.character-sheet.read-only .add-resource-controls {
+  display: none !important;
+}
+
+.character-sheet.read-only .resource-item .edit-btn,
+.character-sheet.read-only .resource-item .drag-handle {
+  display: none !important;
+}
+
+.character-sheet.read-only .resource-item {
+  grid-template-columns: 1fr auto;
+}
+
+.character-sheet.read-only .resource-heading-item {
+  grid-template-columns: auto 1fr;
+}
+
 /* Sheet Actions */
 .sheet-actions {
   margin-top: 2rem;

@@ -10,10 +10,13 @@
   let currentSheet = null;
   let editingAttributeId = null;
   let editingTemplateId = null;
+  let editingResourceId = null;
   let draggedAttributeId = null;
   let draggedTemplateId = null;
+  let draggedResourceId = null;
   let collapsedHeadings = new Set(); // Track collapsed headings locally
   let collapsedTemplateHeadings = new Set(); // Track collapsed template headings locally
+  let collapsedResourceHeadings = new Set(); // Track collapsed resource headings locally
   let readOnlySheets = new Set(); // Track which sheets are in read-only mode (client-side only)
   let isRenaming = false;
 
@@ -39,6 +42,9 @@
     templatesList: document.getElementById('templates-list'),
     addTemplateBtn: document.getElementById('add-template-btn'),
     addTemplateHeadingBtn: document.getElementById('add-template-heading-btn'),
+    resourcesList: document.getElementById('resources-list'),
+    addResourceBtn: document.getElementById('add-resource-btn'),
+    addResourceHeadingBtn: document.getElementById('add-resource-heading-btn'),
     exportSheetBtn: document.getElementById('export-sheet-btn'),
     copySheetBtn: document.getElementById('copy-sheet-btn'),
     deleteSheetBtn: document.getElementById('delete-sheet-btn'),
@@ -60,6 +66,10 @@
     templateHeadingView: document.getElementById('template-heading-view-template'),
     templateHeadingEdit: document.getElementById('template-heading-edit-template'),
     formulaRow: document.getElementById('formula-row-template'),
+    resourceView: document.getElementById('resource-view-template'),
+    resourceEdit: document.getElementById('resource-edit-template'),
+    resourceHeadingView: document.getElementById('resource-heading-view-template'),
+    resourceHeadingEdit: document.getElementById('resource-heading-edit-template'),
   };
 
   // ============================================================
@@ -146,6 +156,7 @@
         if (message.sheet.id === currentSheetId) {
           const wasEditingAttr = editingAttributeId;
           const wasEditingTemplate = editingTemplateId;
+          const wasEditingResource = editingResourceId;
           currentSheet = message.sheet;
           renderSheet();
           if (wasEditingAttr) {
@@ -158,6 +169,12 @@
             const tmpl = currentSheet.rollTemplates.find(t => t.id === wasEditingTemplate);
             if (tmpl) {
               enterTemplateEditMode(wasEditingTemplate);
+            }
+          }
+          if (wasEditingResource) {
+            const res = (currentSheet.resources || []).find(r => r.id === wasEditingResource);
+            if (res) {
+              enterResourceEditMode(wasEditingResource);
             }
           }
         }
@@ -243,6 +260,7 @@
       // Exit any edit mode when going read-only
       if (editingAttributeId) exitEditMode();
       if (editingTemplateId) exitTemplateEditMode();
+      if (editingResourceId) exitResourceEditMode();
       if (isRenaming) cancelRename();
     }
     applyReadOnlyMode();
@@ -320,6 +338,10 @@
       }),
       rollTemplates: currentSheet.rollTemplates.map(tmpl => {
         const { id, order, ...rest } = tmpl;
+        return rest;
+      }),
+      resources: (currentSheet.resources || []).map(res => {
+        const { id, order, ...rest } = res;
         return rest;
       }),
     };
@@ -404,6 +426,7 @@
 
     renderAttributes();
     renderTemplates();
+    renderResources();
   }
 
   // ============================================================
@@ -1600,6 +1623,494 @@
   }
 
   // ============================================================
+  // Resources Rendering
+  // ============================================================
+
+  // Available pip shapes
+  const PIP_SHAPES = [
+    'circle', 'square', 'diamond', 'triangle', 'hexagon', 'star',
+    'heart', 'shield', 'skull', 'flame', 'lightning',
+    'd4', 'd6', 'd8', 'd10', 'd12', 'd20'
+  ];
+
+  // Get SVG for a pip shape
+  function getPipSVG(shape, filled = true) {
+    const strokeWidth = filled ? 0 : 2;
+    const fill = filled ? 'currentColor' : 'none';
+    const stroke = 'currentColor';
+
+    const svgStart = `<svg viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}">`;
+    const svgEnd = '</svg>';
+
+    const shapes = {
+      circle: '<circle cx="12" cy="12" r="10"/>',
+      square: '<rect x="2" y="2" width="20" height="20" rx="2"/>',
+      diamond: '<path d="M12 2 L22 12 L12 22 L2 12 Z"/>',
+      triangle: '<path d="M12 3 L22 21 L2 21 Z"/>',
+      hexagon: '<path d="M12 2 L21.5 7 L21.5 17 L12 22 L2.5 17 L2.5 7 Z"/>',
+      star: '<path d="M12 2 L14.9 8.6 L22 9.3 L17 14.1 L18.2 21.2 L12 17.8 L5.8 21.2 L7 14.1 L2 9.3 L9.1 8.6 Z"/>',
+      heart: '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>',
+      shield: '<path d="M12 2 L3 5 L3 11 C3 16.5 6.8 21.7 12 23 C17.2 21.7 21 16.5 21 11 L21 5 Z"/>',
+      skull: '<path d="M12 2C7 2 3 6 3 10.5C3 13.5 4.5 16 7 17.5V21C7 21.5 7.5 22 8 22H16C16.5 22 17 21.5 17 21V17.5C19.5 16 21 13.5 21 10.5C21 6 17 2 12 2ZM8.5 12C7.7 12 7 11.3 7 10.5C7 9.7 7.7 9 8.5 9C9.3 9 10 9.7 10 10.5C10 11.3 9.3 12 8.5 12ZM15.5 12C14.7 12 14 11.3 14 10.5C14 9.7 14.7 9 15.5 9C16.3 9 17 9.7 17 10.5C17 11.3 16.3 12 15.5 12Z"/>',
+      flame: '<path d="M12 2C8.5 6 6 10 6 14C6 17.3 8.7 20 12 20C15.3 20 18 17.3 18 14C18 10 15.5 6 12 2ZM12 18C10.3 18 9 16.7 9 15C9 13.3 10.3 12 12 12C13.7 12 15 13.3 15 15C15 16.7 13.7 18 12 18Z"/>',
+      lightning: '<path d="M13 2L4 14H11L10 22L20 10H13L15 2H13Z"/>',
+      d4: '<path d="M12 3 L22 21 L2 21 Z"/>',
+      d6: '<rect x="3" y="3" width="18" height="18" rx="2"/>',
+      d8: '<path d="M12 2 L22 12 L12 22 L2 12 Z"/>',
+      d10: '<path d="M12 2 L20 8 L20 16 L12 22 L4 16 L4 8 Z"/>',
+      d12: '<path d="M12 2 L19 5 L22 12 L19 19 L12 22 L5 19 L2 12 L5 5 Z"/>',
+      d20: '<path d="M12 2 L21 8 L21 16 L12 22 L3 16 L3 8 Z"/>',
+    };
+
+    return svgStart + (shapes[shape] || shapes.circle) + svgEnd;
+  }
+
+  function renderResources() {
+    if (!elements.resourcesList) return;
+
+    const resources = currentSheet.resources || [];
+    elements.resourcesList.innerHTML = '';
+
+    if (resources.length === 0) {
+      elements.resourcesList.innerHTML = '<div class="empty-state">No resources</div>';
+      return;
+    }
+
+    // Sort by order
+    const sortedResources = [...resources].sort((a, b) => a.order - b.order);
+
+    // Track current heading for indentation
+    let currentHeadingId = null;
+
+    sortedResources.forEach(resource => {
+      if (resource.type === 'heading') {
+        currentHeadingId = resource.id;
+        const el = createResourceHeadingElement(resource);
+        elements.resourcesList.appendChild(el);
+      } else {
+        const el = createResourceElement(resource, currentHeadingId);
+        elements.resourcesList.appendChild(el);
+      }
+    });
+  }
+
+  function createResourceElement(resource, headingId) {
+    const isEditing = editingResourceId === resource.id;
+    const template = isEditing ? templates.resourceEdit : templates.resourceView;
+    const clone = template.content.cloneNode(true);
+    const el = clone.querySelector('.resource-item');
+
+    el.dataset.resourceId = resource.id;
+
+    // Add indentation if under a heading
+    if (headingId) {
+      el.classList.add('indented');
+      el.dataset.headingId = headingId;
+      if (collapsedResourceHeadings.has(headingId)) {
+        el.classList.add('collapsed');
+      }
+    }
+
+    if (isEditing) {
+      setupResourceEditMode(el, resource);
+    } else {
+      setupResourceViewMode(el, resource);
+    }
+
+    // Setup drag and drop (only in view mode)
+    if (!isEditing) {
+      setupResourceDragAndDrop(el, resource.id);
+    }
+
+    return el;
+  }
+
+  function createResourceHeadingElement(resource) {
+    const isEditing = editingResourceId === resource.id;
+    const template = isEditing ? templates.resourceHeadingEdit : templates.resourceHeadingView;
+    const clone = template.content.cloneNode(true);
+    const el = clone.querySelector('.resource-item');
+
+    el.dataset.resourceId = resource.id;
+
+    if (collapsedResourceHeadings.has(resource.id)) {
+      el.classList.add('collapsed');
+    }
+
+    if (isEditing) {
+      setupResourceHeadingEditMode(el, resource);
+    } else {
+      setupResourceHeadingViewMode(el, resource);
+    }
+
+    // Setup drag and drop (only in view mode)
+    if (!isEditing) {
+      setupResourceDragAndDrop(el, resource.id);
+    }
+
+    return el;
+  }
+
+  function setupResourceViewMode(el, resource) {
+    const nameEl = el.querySelector('.resource-name');
+    const pipsContainer = el.querySelector('.pips-container');
+    const editBtn = el.querySelector('.edit-btn');
+
+    nameEl.textContent = resource.name;
+
+    // Render pips
+    pipsContainer.innerHTML = '';
+    for (let i = 0; i < resource.maximum; i++) {
+      const filled = i < resource.current;
+      const pip = document.createElement('button');
+      pip.className = `pip ${filled ? 'filled' : 'empty'}`;
+      pip.style.setProperty('--pip-color', resource.color);
+      pip.dataset.index = i;
+      pip.innerHTML = getPipSVG(resource.shape, filled);
+      pip.addEventListener('click', () => handlePipClick(resource, i));
+      pipsContainer.appendChild(pip);
+    }
+
+    editBtn.addEventListener('click', () => enterResourceEditMode(resource.id));
+  }
+
+  function setupResourceHeadingViewMode(el, resource) {
+    const nameEl = el.querySelector('.resource-heading-name');
+    const editBtn = el.querySelector('.edit-btn');
+    const collapseBtn = el.querySelector('.collapse-btn');
+
+    nameEl.textContent = resource.name;
+
+    editBtn.addEventListener('click', () => enterResourceEditMode(resource.id));
+    collapseBtn.addEventListener('click', () => toggleResourceHeadingCollapse(resource.id));
+  }
+
+  function setupResourceEditMode(el, resource) {
+    const nameInput = el.querySelector('.edit-resource-name');
+    const maxInput = el.querySelector('.edit-resource-max');
+    const shapeSelector = el.querySelector('.shape-selector');
+    const colorInput = el.querySelector('.edit-resource-color');
+    const saveBtn = el.querySelector('.save-btn');
+    const cancelBtn = el.querySelector('.cancel-btn');
+    const deleteBtn = el.querySelector('.delete-btn');
+
+    nameInput.value = resource.name;
+    maxInput.value = resource.maximum;
+    colorInput.value = resource.color;
+
+    // Render shape selector
+    shapeSelector.innerHTML = '';
+    PIP_SHAPES.forEach(shape => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = `shape-option${shape === resource.shape ? ' selected' : ''}`;
+      option.dataset.shape = shape;
+      option.innerHTML = getPipSVG(shape, true);
+      option.title = shape;
+      option.addEventListener('click', () => {
+        shapeSelector.querySelectorAll('.shape-option').forEach(o => o.classList.remove('selected'));
+        option.classList.add('selected');
+      });
+      shapeSelector.appendChild(option);
+    });
+
+    // Handle keyboard shortcuts
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const selectedShape = shapeSelector.querySelector('.shape-option.selected')?.dataset.shape || resource.shape;
+        saveResource(resource.id, nameInput.value, parseInt(maxInput.value, 10), resource.current, selectedShape, colorInput.value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        exitResourceEditMode();
+      }
+    };
+
+    nameInput.addEventListener('keydown', handleKeyDown);
+    maxInput.addEventListener('keydown', handleKeyDown);
+
+    saveBtn.addEventListener('click', () => {
+      const selectedShape = shapeSelector.querySelector('.shape-option.selected')?.dataset.shape || resource.shape;
+      saveResource(resource.id, nameInput.value, parseInt(maxInput.value, 10), resource.current, selectedShape, colorInput.value);
+    });
+
+    cancelBtn.addEventListener('click', () => exitResourceEditMode());
+    deleteBtn.addEventListener('click', () => deleteResource(resource.id));
+
+    // Focus name input
+    setTimeout(() => nameInput.focus(), 0);
+  }
+
+  function setupResourceHeadingEditMode(el, resource) {
+    const nameInput = el.querySelector('.edit-resource-heading-name');
+    const saveBtn = el.querySelector('.save-btn');
+    const cancelBtn = el.querySelector('.cancel-btn');
+    const deleteBtn = el.querySelector('.delete-btn');
+
+    nameInput.value = resource.name;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveResourceHeading(resource.id, nameInput.value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        exitResourceEditMode();
+      }
+    };
+
+    nameInput.addEventListener('keydown', handleKeyDown);
+
+    saveBtn.addEventListener('click', () => saveResourceHeading(resource.id, nameInput.value));
+    cancelBtn.addEventListener('click', () => exitResourceEditMode());
+    deleteBtn.addEventListener('click', () => deleteResource(resource.id));
+
+    setTimeout(() => nameInput.focus(), 0);
+  }
+
+  // ============================================================
+  // Resource Edit Mode
+  // ============================================================
+
+  function enterResourceEditMode(resourceId) {
+    editingResourceId = resourceId;
+    renderResources();
+  }
+
+  function exitResourceEditMode() {
+    editingResourceId = null;
+    renderResources();
+  }
+
+  function saveResource(id, name, maximum, current, shape, color) {
+    if (!name.trim()) {
+      alert('Name is required');
+      return;
+    }
+
+    if (!maximum || maximum < 1) {
+      alert('Maximum must be at least 1');
+      return;
+    }
+
+    const resource = (currentSheet.resources || []).find(r => r.id === id);
+    if (!resource) return;
+
+    // Clamp current to new maximum
+    const newCurrent = Math.min(current, maximum);
+
+    const updatedResource = {
+      ...resource,
+      name: name.trim(),
+      maximum: maximum,
+      current: newCurrent,
+      shape: shape,
+      color: color,
+    };
+
+    send({ type: 'updateResource', sheetId: currentSheetId, resource: updatedResource });
+    exitResourceEditMode();
+  }
+
+  function saveResourceHeading(id, name) {
+    if (!name.trim()) {
+      alert('Name is required');
+      return;
+    }
+
+    const resource = (currentSheet.resources || []).find(r => r.id === id);
+    if (!resource) return;
+
+    const updatedResource = {
+      ...resource,
+      name: name.trim(),
+    };
+
+    send({ type: 'updateResource', sheetId: currentSheetId, resource: updatedResource });
+    exitResourceEditMode();
+  }
+
+  function deleteResource(id) {
+    if (confirm('Delete this resource?')) {
+      send({ type: 'deleteResource', sheetId: currentSheetId, resourceId: id });
+      exitResourceEditMode();
+    }
+  }
+
+  function addResource() {
+    let name = 'New Resource';
+    let counter = 1;
+
+    const resources = currentSheet.resources || [];
+    while (resources.some(r => r.name === name)) {
+      counter++;
+      name = 'New Resource ' + counter;
+    }
+
+    const resource = {
+      type: 'resource',
+      name,
+      maximum: 5,
+      current: 5,
+      shape: 'circle',
+      color: '#6366f1',
+    };
+
+    send({ type: 'createResource', sheetId: currentSheetId, resource });
+  }
+
+  function addResourceHeading() {
+    let name = 'New Section';
+    let counter = 1;
+
+    const resources = currentSheet.resources || [];
+    while (resources.some(r => r.type === 'heading' && r.name === name)) {
+      counter++;
+      name = 'New Section ' + counter;
+    }
+
+    const resource = {
+      type: 'heading',
+      name,
+      collapsed: false,
+    };
+
+    send({ type: 'createResource', sheetId: currentSheetId, resource });
+  }
+
+  // ============================================================
+  // Resource Heading Collapse
+  // ============================================================
+
+  function toggleResourceHeadingCollapse(headingId) {
+    if (collapsedResourceHeadings.has(headingId)) {
+      collapsedResourceHeadings.delete(headingId);
+    } else {
+      collapsedResourceHeadings.add(headingId);
+    }
+    renderResources();
+  }
+
+  // ============================================================
+  // Pip Click Logic
+  // ============================================================
+
+  function handlePipClick(resource, clickedIndex) {
+    // clickedIndex is 0-based (0 to maximum-1)
+    const clickedPipFilled = clickedIndex < resource.current;
+
+    let newCurrent;
+    if (clickedPipFilled) {
+      // Clicking a filled pip: empty it and all after it
+      newCurrent = clickedIndex;
+    } else {
+      // Clicking an empty pip: fill it and all before it
+      newCurrent = clickedIndex + 1;
+    }
+
+    // Send update to server
+    const updated = { ...resource, current: newCurrent };
+    send({ type: 'updateResource', sheetId: currentSheetId, resource: updated });
+  }
+
+  // ============================================================
+  // Resource Drag and Drop
+  // ============================================================
+
+  function setupResourceDragAndDrop(el, resourceId) {
+    const handle = el.querySelector('.drag-handle');
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startResourceDrag(resourceId, e);
+    });
+
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (draggedResourceId && draggedResourceId !== resourceId) {
+        el.classList.add('drag-over');
+      }
+    });
+
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drag-over');
+    });
+
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      if (draggedResourceId && draggedResourceId !== resourceId) {
+        reorderResources(draggedResourceId, resourceId);
+      }
+    });
+  }
+
+  function startResourceDrag(resourceId, startEvent) {
+    draggedResourceId = resourceId;
+    const draggedEl = elements.resourcesList.querySelector(`[data-resource-id="${resourceId}"]`);
+    if (!draggedEl) return;
+
+    draggedEl.classList.add('dragging');
+
+    const items = Array.from(elements.resourcesList.querySelectorAll('.resource-item:not(.collapsed)'));
+    const draggedIndex = items.indexOf(draggedEl);
+    const itemHeight = draggedEl.offsetHeight + 4; // Including gap
+
+    let currentIndex = draggedIndex;
+    const startY = startEvent.clientY;
+
+    const onMouseMove = (e) => {
+      const deltaY = e.clientY - startY;
+      const indexDelta = Math.round(deltaY / itemHeight);
+      const newIndex = Math.max(0, Math.min(items.length - 1, draggedIndex + indexDelta));
+
+      if (newIndex !== currentIndex) {
+        items.forEach(item => item.classList.remove('drag-over'));
+        if (newIndex !== draggedIndex) {
+          items[newIndex]?.classList.add('drag-over');
+        }
+        currentIndex = newIndex;
+      }
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+
+      draggedEl.classList.remove('dragging');
+      items.forEach(item => item.classList.remove('drag-over'));
+
+      if (currentIndex !== draggedIndex) {
+        const orderedIds = items.map(item => item.dataset.resourceId);
+        const [removed] = orderedIds.splice(draggedIndex, 1);
+        orderedIds.splice(currentIndex, 0, removed);
+
+        send({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
+      }
+
+      draggedResourceId = null;
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
+  function reorderResources(draggedId, targetId) {
+    const items = Array.from(elements.resourcesList.querySelectorAll('.resource-item'));
+    const orderedIds = items.map(item => item.dataset.resourceId);
+
+    const draggedIndex = orderedIds.indexOf(draggedId);
+    const targetIndex = orderedIds.indexOf(targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    orderedIds.splice(draggedIndex, 1);
+    orderedIds.splice(targetIndex, 0, draggedId);
+
+    send({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
+  }
+
+  // ============================================================
   // Roll Execution (placeholder - to be implemented in Phase 2)
   // ============================================================
 
@@ -2067,6 +2578,8 @@
     elements.addDerivedAttrBtn.addEventListener('click', () => addAttribute('derived'));
     elements.addTemplateBtn.addEventListener('click', addRollTemplate);
     elements.addTemplateHeadingBtn.addEventListener('click', addTemplateHeading);
+    elements.addResourceBtn.addEventListener('click', addResource);
+    elements.addResourceHeadingBtn.addEventListener('click', addResourceHeading);
 
     elements.deleteModal.addEventListener('click', (e) => {
       if (e.target === elements.deleteModal) {
