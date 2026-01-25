@@ -86,6 +86,24 @@ Layout adapts based on **viewport aspect ratio** (not pixel breakpoints):
 - Scrollable list of roll entries
 - Clear History button at bottom
 
+## Resizable Divider
+
+A resizer divider sits between the character sheet and history panel:
+
+- **Edit mode**: 6px wide/tall, draggable to resize sections
+- **Read-only mode**: 1px thin line, not draggable
+- **Minimum section size**: 100px in both orientations
+- **Persistence**: Ratios saved to localStorage, separate for landscape and portrait
+
+The resizer:
+- Drag left/right in landscape mode
+- Drag up/down in portrait mode
+- Purple highlight on hover/drag
+- Touch support for mobile devices
+
+LocalStorage key: `rollsheet-resizer-ratios`
+Format: `{ landscape: 0.5, portrait: 0.5 }` (ratio = sheet proportion)
+
 ## CSS Media Queries
 
 Use `orientation` media queries for layout changes:

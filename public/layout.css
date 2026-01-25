@@ -21,9 +21,10 @@
 
 /* ==========================================================================
    LANDSCAPE MODE (width > height)
-   - Horizontal columns: sidebar | sheet | history
+   - Horizontal columns: sidebar | sheet | resizer | history
    - Sidebar on left, vertical icon list
    - Each column scrolls independently
+   - Resizer is vertical, drag left/right
    ========================================================================== */
 @media (orientation: landscape) {
   .app-container {
@@ -40,16 +41,23 @@
   }
 
   .character-sheet {
-    flex: 1;
-    min-width: 0; /* Allow flex item to shrink below content size */
+    flex: 1 1 50%;
+    min-width: 100px;
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
   }
 
+  .resizer {
+    flex-shrink: 0;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+  }
+
   .history-panel {
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 50%;
+    min-width: 100px;
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
@@ -58,9 +66,10 @@
 
 /* ==========================================================================
    PORTRAIT MODE (height > width)
-   - Vertical stack: sidebar (top) | sheet | history
+   - Vertical stack: sidebar (top) | sheet | resizer | history
    - Sidebar horizontal, scrolls horizontally if overflow
    - Sheet and history scroll independently vertically
+   - Resizer is horizontal, drag up/down
    ========================================================================== */
 @media (orientation: portrait) {
   .app-container {
@@ -77,16 +86,23 @@
   }
 
   .character-sheet {
-    flex: 1;
-    min-height: 0; /* Allow flex item to shrink below content size */
+    flex: 1 1 50%;
+    min-height: 100px;
     width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
   }
 
+  .resizer {
+    flex-shrink: 0;
+    width: 100%;
+    height: 6px;
+    cursor: row-resize;
+  }
+
   .history-panel {
-    flex: 1;
-    min-height: 0;
+    flex: 1 1 50%;
+    min-height: 100px;
     width: 100%;
     overflow-y: auto;
     overflow-x: hidden;

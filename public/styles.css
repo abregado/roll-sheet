@@ -41,6 +41,41 @@ input {
 
 /* App Container - see layout.css for positioning */
 
+/* Resizer between sheet and history */
+.resizer {
+  background-color: #2a2a4a;
+  transition: background-color 0.15s ease;
+  position: relative;
+  z-index: 10;
+}
+
+.resizer:hover {
+  background-color: #6366f1;
+}
+
+.resizer.dragging {
+  background-color: #6366f1;
+}
+
+/* Read-only mode: thin, non-interactive divider */
+.resizer.read-only {
+  background-color: #2a2a4a;
+  cursor: default;
+  pointer-events: none;
+}
+
+@media (orientation: landscape) {
+  .resizer.read-only {
+    width: 1px;
+  }
+}
+
+@media (orientation: portrait) {
+  .resizer.read-only {
+    height: 1px;
+  }
+}
+
 /* Sheet Sidebar - layout in layout.css */
 .sheet-sidebar {
   background-color: #16162a;

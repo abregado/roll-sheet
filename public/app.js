@@ -53,6 +53,8 @@
     deleteModal: document.getElementById('delete-modal'),
     deleteCancelBtn: document.getElementById('delete-cancel-btn'),
     deleteConfirmBtn: document.getElementById('delete-confirm-btn'),
+    resizer: document.getElementById('resizer'),
+    appContainer: document.querySelector('.app-container'),
   };
 
   // Templates
@@ -248,6 +250,8 @@
     const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
     elements.characterSheet.classList.toggle('read-only', isReadOnly);
     // Lock icons are toggled via CSS based on .read-only class
+    // Update resizer appearance
+    updateResizerReadOnly();
   }
 
   function toggleReadOnly() {
@@ -264,6 +268,184 @@
       if (isRenaming) cancelRename();
     }
     applyReadOnlyMode();
+  }
+
+  // ============================================================
+  // Resizer (between sheet and history)
+  // ============================================================
+
+  const RESIZER_STORAGE_KEY = 'rollsheet-resizer-ratios';
+  const MIN_SECTION_SIZE = 100; // pixels
+
+  function getOrientation() {
+    return window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
+  }
+
+  function loadResizerRatios() {
+    try {
+      const stored = localStorage.getItem(RESIZER_STORAGE_KEY);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (e) {
+      console.error('Error loading resizer ratios:', e);
+    }
+    return { landscape: 0.5, portrait: 0.5 };
+  }
+
+  function saveResizerRatios(ratios) {
+    try {
+      localStorage.setItem(RESIZER_STORAGE_KEY, JSON.stringify(ratios));
+    } catch (e) {
+      console.error('Error saving resizer ratios:', e);
+    }
+  }
+
+  function applyResizerRatio() {
+    const ratios = loadResizerRatios();
+    const orientation = getOrientation();
+    const ratio = ratios[orientation] || 0.5;
+
+    // Apply flex-basis to sheet and history based on ratio
+    // ratio is the proportion allocated to the sheet (0-1)
+    const sheetPercent = ratio * 100;
+    const historyPercent = (1 - ratio) * 100;
+
+    elements.characterSheet.style.flex = `1 1 ${sheetPercent}%`;
+    document.querySelector('.history-panel').style.flex = `1 1 ${historyPercent}%`;
+  }
+
+  function updateResizerReadOnly() {
+    const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
+    elements.resizer.classList.toggle('read-only', isReadOnly);
+  }
+
+  function setupResizer() {
+    let isDragging = false;
+    let startPos = 0;
+    let startSheetSize = 0;
+    let startHistorySize = 0;
+
+    const onMouseDown = (e) => {
+      // Only allow dragging in edit mode
+      const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
+      if (isReadOnly) return;
+
+      e.preventDefault();
+      isDragging = true;
+      elements.resizer.classList.add('dragging');
+      document.body.style.cursor = getOrientation() === 'landscape' ? 'col-resize' : 'row-resize';
+      document.body.style.userSelect = 'none';
+
+      const orientation = getOrientation();
+      if (orientation === 'landscape') {
+        startPos = e.clientX;
+        startSheetSize = elements.characterSheet.offsetWidth;
+        startHistorySize = document.querySelector('.history-panel').offsetWidth;
+      } else {
+        startPos = e.clientY;
+        startSheetSize = elements.characterSheet.offsetHeight;
+        startHistorySize = document.querySelector('.history-panel').offsetHeight;
+      }
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    };
+
+    const onMouseMove = (e) => {
+      if (!isDragging) return;
+
+      const orientation = getOrientation();
+      const historyPanel = document.querySelector('.history-panel');
+      let delta, newSheetSize, newHistorySize, totalSize;
+
+      if (orientation === 'landscape') {
+        delta = e.clientX - startPos;
+        newSheetSize = startSheetSize + delta;
+        newHistorySize = startHistorySize - delta;
+        totalSize = startSheetSize + startHistorySize;
+      } else {
+        delta = e.clientY - startPos;
+        newSheetSize = startSheetSize + delta;
+        newHistorySize = startHistorySize - delta;
+        totalSize = startSheetSize + startHistorySize;
+      }
+
+      // Enforce minimum sizes
+      if (newSheetSize < MIN_SECTION_SIZE) {
+        newSheetSize = MIN_SECTION_SIZE;
+        newHistorySize = totalSize - MIN_SECTION_SIZE;
+      }
+      if (newHistorySize < MIN_SECTION_SIZE) {
+        newHistorySize = MIN_SECTION_SIZE;
+        newSheetSize = totalSize - MIN_SECTION_SIZE;
+      }
+
+      // Calculate ratio and apply
+      const ratio = newSheetSize / totalSize;
+      elements.characterSheet.style.flex = `1 1 ${ratio * 100}%`;
+      historyPanel.style.flex = `1 1 ${(1 - ratio) * 100}%`;
+    };
+
+    const onMouseUp = () => {
+      if (!isDragging) return;
+
+      isDragging = false;
+      elements.resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+
+      // Save the current ratio
+      const orientation = getOrientation();
+      const historyPanel = document.querySelector('.history-panel');
+      let totalSize, sheetSize;
+
+      if (orientation === 'landscape') {
+        sheetSize = elements.characterSheet.offsetWidth;
+        totalSize = sheetSize + historyPanel.offsetWidth;
+      } else {
+        sheetSize = elements.characterSheet.offsetHeight;
+        totalSize = sheetSize + historyPanel.offsetHeight;
+      }
+
+      const ratio = sheetSize / totalSize;
+      const ratios = loadResizerRatios();
+      ratios[orientation] = ratio;
+      saveResizerRatios(ratios);
+    };
+
+    // Touch support
+    const onTouchStart = (e) => {
+      const touch = e.touches[0];
+      onMouseDown({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => e.preventDefault() });
+    };
+
+    const onTouchMove = (e) => {
+      if (!isDragging) return;
+      const touch = e.touches[0];
+      onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+    };
+
+    const onTouchEnd = () => {
+      onMouseUp();
+    };
+
+    elements.resizer.addEventListener('mousedown', onMouseDown);
+    elements.resizer.addEventListener('touchstart', onTouchStart, { passive: false });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+
+    // Re-apply ratio on orientation change
+    window.addEventListener('resize', () => {
+      applyResizerRatio();
+    });
+
+    // Initial application
+    applyResizerRatio();
+    updateResizerReadOnly();
   }
 
   // ============================================================
@@ -2675,6 +2857,7 @@
   function init() {
     console.log('Roll Sheet initialized');
     setupEventListeners();
+    setupResizer();
     connect();
   }
 
