@@ -1431,6 +1431,12 @@ input {
   flex-direction: column;
   gap: 0.75rem;
   margin-bottom: 1rem;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
 }
 
 .history-item {
