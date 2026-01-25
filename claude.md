@@ -76,24 +76,28 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
   - [ ] Reconnection feedback
 
 ## Small future ideas to consider
+- IMPORTANT: separate scroll for character sheet and history on desktop view. The newest 2 history entries should always be visible when scrolling the history down. The new sheet button should always be at the bottom of the screen (sticky)
+- IMPORTANT: roll template buttons should not have split styles when there is only a single formula variant
+- IMPORTANT: On desktop support for dragging the divider between sheet and history to change the width of the columns. Save this as a client setting.
 - adding images to represent each roll template. use them as either an icon, or an image based roll button 
 - Using images in the roll history to create more drama. Drag an image onto a Roll Template the upload it and add it to the roll template.
 - support for multiple {results} using square brackets in dice formula ("[1d20][1d20]" gives {result} and {result2})
-- On desktop support for dragging the divider between sheet and history to change the width of the columns. Save this as a client setting.
 - columns for attributes, so the user can have more of them side by side
 - when the server starts and detects no sheets.json, generate an empty one.
-- when making a new derived value, default to no formula. But if a derived value has no formula, its value evaluates to zero. This is so that when a user makes a new derived attribute and then edits it, they see the default text in the formula box
+- when making a new derived value, default to no formula. But add a special case that if a derived value has no formula, its value evaluates to zero. This is so that when a user makes a new derived attribute and then edits it, they see the default text in the formula box
 - new formula variant prefabs button to add Advantage/Disadvantage quickly
-- export character sheet data to text file button at the bottom of each sheet
-- import character sheet data by dropping text file on the + sheet button.
-- roll template buttons should not have split styles when there is only a single formula variant
 - in the roll breakdown of history entries, show the code of the attributes used (eg: // 3 (@str)) inside the formula (eg:// 2d20dl: [3, 7] = 7 + 3 (@str) = 10)
+- ability to use codes in a resource max field
+- BUG: There is some weirdness when reordering an item to the top or bottom of a list
+- OR operator in formulas eg: // {@prof | @dex | 2} for "use prof if it exists, then dex, then 2"
+- conditionals in text formulas
+- option in roll templates to for the split button drop down from appearing, and then having it also show the first result. useful for rolls with many formulas.
+- New string attribute that takes a comma separated list. The user can select which option is currently selected using a dropdown. 
+- button on history entries to copy the roll template to our current sheet
+- when a client rolls something, show the result in the middle of the screen.
+
 
 ## Big new features to add
-### Resource sheet section
-New section for sheets to track resources like HP, Ability charges, Spell tokens. Should be generic just like everything else but have nice UX.
-Selectable shapes for the resource pips (polyhedral dice representations, circle, star, triangle, ect) color and icon also customizable. Click pips to fill or empty them.
-
 ### Sheet style and visual customization
 Roleplaying games are all about personalization. We need solid options for the user to customize how their sheet looks, and which vibe it portrays.
 Some ideas would include:
@@ -105,6 +109,7 @@ Some ideas would include:
 - the user customization should not require them to write css so we need UX like dragging images onto parts of the sheet to change it.
 - adding style flair to the roll history entries made by this character sheet 
 - css customization per sheet via a paint icon at the bottom of the sheet. Has several premade css styles to choose from (Light, Dark, Retro, Paper)
+- option to color roll buttons and drop down options (for example, green background for adv, red for disadvantage)
 
 ### Touch screen and mobile accessibility
 - in landscape mode, just use desktop mode. In portrait mode a special view
@@ -118,6 +123,9 @@ Some ideas would include:
 
 ### Roll tables
 For generating random words and numbers. These can be used in display formulas.
+
+## VTT Connectivity for sending roll results
+Maintain a list of ip's that get sent the roll results 
 
 ---
 
