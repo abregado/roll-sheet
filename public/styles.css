@@ -39,30 +39,57 @@ input {
   font-family: inherit;
 }
 
-/* App Container - Main Layout */
-.app-container {
-  display: grid;
-  grid-template-columns: 60px 1fr 1fr;
-  min-height: 100vh;
-}
+/* App Container - see layout.css for positioning */
 
-/* Sheet Sidebar */
+/* Sheet Sidebar - layout in layout.css */
 .sheet-sidebar {
   background-color: #16162a;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 1rem 0;
+  padding: 0.5rem;
   gap: 0.5rem;
-  border-right: 1px solid #2a2a4a;
+  border: 1px solid #2a2a4a;
+  border-width: 0;
+}
+
+/* Landscape: border on right */
+@media (orientation: landscape) {
+  .sheet-sidebar {
+    border-right-width: 1px;
+  }
+}
+
+/* Portrait: border on bottom */
+@media (orientation: portrait) {
+  .sheet-sidebar {
+    border-bottom-width: 1px;
+  }
 }
 
 .sheet-icons {
   display: flex;
-  flex-direction: column;
   gap: 0.5rem;
   flex: 1;
-  overflow-y: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Landscape: vertical icon list */
+@media (orientation: landscape) {
+  .sheet-icons {
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+/* Portrait: horizontal icon list */
+@media (orientation: portrait) {
+  .sheet-icons {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
 }
 
 .sheet-icon {
@@ -94,6 +121,7 @@ input {
   color: #6366f1;
   background-color: transparent;
   border: 2px dashed #6366f1;
+  flex-shrink: 0;
 }
 
 .sheet-icon.add-sheet:hover {
@@ -106,11 +134,25 @@ input {
   transform: scale(1.1);
 }
 
-/* Character Sheet */
+/* Character Sheet - layout in layout.css */
 .character-sheet {
   padding: 1.5rem;
-  overflow-y: auto;
-  border-right: 1px solid #2a2a4a;
+  border: 1px solid #2a2a4a;
+  border-width: 0;
+}
+
+/* Landscape: border on right */
+@media (orientation: landscape) {
+  .character-sheet {
+    border-right-width: 1px;
+  }
+}
+
+/* Portrait: border on bottom */
+@media (orientation: portrait) {
+  .character-sheet {
+    border-bottom-width: 1px;
+  }
 }
 
 /* Sheet Header */
@@ -1338,17 +1380,17 @@ input {
   color: #fff;
 }
 
-/* History Panel */
+/* History Panel - layout in layout.css */
 .history-panel {
   padding: 1.5rem;
   background-color: #16162a;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .history-list {
   flex: 1;
+  min-height: 0; /* Allow shrinking in flex container */
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1686,59 +1728,16 @@ input {
   margin-top: 0.25rem;
 }
 
-/* Responsive Design */
-@media (max-width: 900px) {
-  .app-container {
-    grid-template-columns: 60px 1fr;
-    grid-template-rows: 1fr 1fr;
-  }
+/* Responsive Design - main layout handled by layout.css */
 
-  .sheet-sidebar {
-    grid-row: span 2;
-  }
-
-  .character-sheet {
-    border-right: none;
-    border-bottom: 1px solid #2a2a4a;
-  }
-
-  .history-panel {
-    max-height: 50vh;
-  }
-}
-
-@media (max-width: 600px) {
-  .app-container {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
-  }
-
-  .sheet-sidebar {
-    flex-direction: row;
-    padding: 0.5rem 1rem;
-    border-right: none;
-    border-bottom: 1px solid #2a2a4a;
-    overflow-x: auto;
-  }
-
-  .sheet-icons {
-    flex-direction: row;
-    overflow-y: visible;
-    overflow-x: auto;
-  }
-
-  .sheet-icon.add-sheet {
-    margin-top: 0;
-    margin-left: auto;
-  }
-
+/* Portrait-specific content adjustments */
+@media (orientation: portrait) {
   .character-sheet {
     padding: 1rem;
   }
 
   .history-panel {
     padding: 1rem;
-    max-height: 40vh;
   }
 
   .add-attribute-controls {

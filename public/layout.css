@@ -1,0 +1,94 @@
+/* ==========================================================================
+   LAYOUT - Main app structure and responsive behavior
+
+   This file handles ONLY positioning, sizing, and scrolling of main sections.
+   Content styling is handled in styles.css.
+
+   Sections:
+   - .sheet-sidebar (toolbar)
+   - .character-sheet (main content)
+   - .history-panel (roll history)
+   ========================================================================== */
+
+/* Root layout container */
+.app-container {
+  display: flex;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   LANDSCAPE MODE (width > height)
+   - Horizontal columns: sidebar | sheet | history
+   - Sidebar on left, vertical icon list
+   - Each column scrolls independently
+   ========================================================================== */
+@media (orientation: landscape) {
+  .app-container {
+    flex-direction: row;
+  }
+
+  .sheet-sidebar {
+    flex-shrink: 0;
+    width: 60px;
+    height: 100%;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .character-sheet {
+    flex: 1;
+    min-width: 0; /* Allow flex item to shrink below content size */
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .history-panel {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+/* ==========================================================================
+   PORTRAIT MODE (height > width)
+   - Vertical stack: sidebar (top) | sheet | history
+   - Sidebar horizontal, scrolls horizontally if overflow
+   - Sheet and history scroll independently vertically
+   ========================================================================== */
+@media (orientation: portrait) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .sheet-sidebar {
+    flex-shrink: 0;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .character-sheet {
+    flex: 1;
+    min-height: 0; /* Allow flex item to shrink below content size */
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .history-panel {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
