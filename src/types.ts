@@ -177,6 +177,10 @@ export type ClientMessage =
   | { type: 'updateResource'; sheetId: string; resource: Resource; sheetVersion: number }
   | { type: 'deleteResource'; sheetId: string; resourceId: string; sheetVersion: number }
   | { type: 'reorderResources'; sheetId: string; resourceIds: string[]; sheetVersion: number }
+  | { type: 'createHeading'; sheetId: string; heading: Omit<Heading, 'id' | 'sort'>; sheetVersion: number }
+  | { type: 'updateHeading'; sheetId: string; heading: Heading; sheetVersion: number }
+  | { type: 'deleteHeading'; sheetId: string; headingId: string; sheetVersion: number }
+  | { type: 'reorderHeadings'; sheetId: string; headingIds: string[]; sheetVersion: number }
   | { type: 'getHistory' }
   | { type: 'clearHistory' }
   | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number };

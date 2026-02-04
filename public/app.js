@@ -9,14 +9,16 @@
   let currentSheetId = null;
   let currentSheet = null;
   let editingAttributeId = null;
+  let editingHeadingId = null;
   let editingTemplateId = null;
   let editingResourceId = null;
   let draggedAttributeId = null;
+  let draggedHeadingId = null;
   let draggedTemplateId = null;
   let draggedResourceId = null;
   let collapsedHeadings = new Set(); // Track collapsed headings locally
-  let collapsedTemplateHeadings = new Set(); // Track collapsed template headings locally
-  let collapsedResourceHeadings = new Set(); // Track collapsed resource headings locally
+  let activeItem = null;
+  let pendingInsert = null;
   let readOnlySheets = new Set(); // Track which sheets are in read-only mode (client-side only)
   let isRenaming = false;
 
@@ -136,6 +138,7 @@
       case 'sheet':
         currentSheet = message.sheet;
         currentSheetId = message.sheet.id;
+        handlePendingInsert();
         renderSheet();
         break;
 
@@ -165,14 +168,22 @@
       case 'sheetUpdated':
         if (message.sheet.id === currentSheetId) {
           const wasEditingAttr = editingAttributeId;
+          const wasEditingHeading = editingHeadingId;
           const wasEditingTemplate = editingTemplateId;
           const wasEditingResource = editingResourceId;
           currentSheet = message.sheet;
+          handlePendingInsert();
           renderSheet();
           if (wasEditingAttr) {
             const attr = currentSheet.attributes.find(a => a.id === wasEditingAttr);
             if (attr) {
               enterEditMode(wasEditingAttr);
+            }
+          }
+          if (wasEditingHeading) {
+            const heading = (currentSheet.headings || []).find(h => h.id === wasEditingHeading);
+            if (heading) {
+              enterHeadingEditMode(wasEditingHeading);
             }
           }
           if (wasEditingTemplate) {
@@ -250,7 +261,11 @@
   function selectSheet(sheetId) {
     currentSheetId = sheetId;
     editingAttributeId = null;
+    editingHeadingId = null;
     editingTemplateId = null;
+    editingResourceId = null;
+    activeItem = null;
+    pendingInsert = null;
     isRenaming = false;
     // Default to read-only when selecting a sheet
     if (!readOnlySheets.has(sheetId)) {
@@ -278,6 +293,7 @@
       readOnlySheets.add(currentSheetId);
       // Exit any edit mode when going read-only
       if (editingAttributeId) exitEditMode();
+      if (editingHeadingId) exitHeadingEditMode();
       if (editingTemplateId) exitTemplateEditMode();
       if (editingResourceId) exitResourceEditMode();
       if (isRenaming) cancelRename();
@@ -529,16 +545,20 @@
       name: currentSheet.name,
       initials: currentSheet.initials,
       attributes: currentSheet.attributes.map(attr => {
-        // Remove id and order, keeping the rest
-        const { id, order, ...rest } = attr;
+        // Remove id, keeping sort and the rest
+        const { id, ...rest } = attr;
         return rest;
       }),
       rollTemplates: currentSheet.rollTemplates.map(tmpl => {
-        const { id, order, ...rest } = tmpl;
+        const { id, ...rest } = tmpl;
         return rest;
       }),
       resources: (currentSheet.resources || []).map(res => {
-        const { id, order, ...rest } = res;
+        const { id, ...rest } = res;
+        return rest;
+      }),
+      headings: (currentSheet.headings || []).map(heading => {
+        const { id, ...rest } = heading;
         return rest;
       }),
     };
@@ -577,6 +597,12 @@
         if (!Array.isArray(sheetData.rollTemplates)) {
           sheetData.rollTemplates = [];
         }
+        if (!Array.isArray(sheetData.resources)) {
+          sheetData.resources = [];
+        }
+        if (!Array.isArray(sheetData.headings)) {
+          sheetData.headings = [];
+        }
 
         send({ type: 'importSheet', sheetData });
       } catch (err) {
@@ -614,6 +640,8 @@
   function renderSheet() {
     if (!currentSheet) {
       elements.attributesList.innerHTML = '<div class="empty-state">No sheet selected</div>';
+      elements.templatesList.innerHTML = '';
+      elements.resourcesList.innerHTML = '';
       elements.sheetName.textContent = 'Character Sheet';
       return;
     }
@@ -621,39 +649,126 @@
     // Update sheet name display
     elements.sheetName.textContent = currentSheet.name;
 
-    renderAttributes();
-    renderTemplates();
-    renderResources();
+    renderUnifiedList();
+    elements.templatesList.innerHTML = '';
+    elements.resourcesList.innerHTML = '';
   }
 
   // ============================================================
-  // Attribute Rendering
+  // Unified Rendering
   // ============================================================
 
-  function renderAttributes() {
+  function getUnifiedList() {
+    if (!currentSheet || !window.renderList) {
+      return [];
+    }
+    return window.renderList.buildUnifiedList(currentSheet);
+  }
+
+  function renderUnifiedList() {
     elements.attributesList.innerHTML = '';
 
-    if (currentSheet.attributes.length === 0) {
-      elements.attributesList.innerHTML = '<div class="empty-state">No attributes</div>';
+    const unified = getUnifiedList();
+    if (unified.length === 0) {
+      elements.attributesList.innerHTML = '<div class="empty-state">No items</div>';
       return;
     }
 
-    // Sort by order
-    const sortedAttributes = [...currentSheet.attributes].sort((a, b) => a.order - b.order);
-
-    // Track current heading for indentation
     let currentHeadingId = null;
 
-    sortedAttributes.forEach(attr => {
-      if (attr.type === 'heading') {
-        currentHeadingId = attr.id;
-        const el = createHeadingElement(attr);
-        elements.attributesList.appendChild(el);
-      } else {
-        const el = createAttributeElement(attr, currentHeadingId);
+    unified.forEach(entry => {
+      let el = null;
+
+      if (entry.kind === 'heading') {
+        currentHeadingId = entry.item.id;
+        el = createHeadingElement(entry.item);
+      } else if (entry.kind === 'attribute') {
+        el = createAttributeElement(entry.item, currentHeadingId);
+      } else if (entry.kind === 'rollTemplate') {
+        el = createTemplateElement(entry.item, currentHeadingId);
+      } else if (entry.kind === 'resource') {
+        el = createResourceElement(entry.item, currentHeadingId);
+      }
+
+      if (el) {
         elements.attributesList.appendChild(el);
       }
     });
+  }
+
+  function setActiveItem(kind, id) {
+    activeItem = { kind, id };
+  }
+
+  function getKindItems(kind) {
+    if (!currentSheet) return [];
+    if (kind === 'attribute') return currentSheet.attributes || [];
+    if (kind === 'rollTemplate') return currentSheet.rollTemplates || [];
+    if (kind === 'resource') return currentSheet.resources || [];
+    if (kind === 'heading') return currentSheet.headings || [];
+    return [];
+  }
+
+  function getKindIds(kind) {
+    return getKindItems(kind).map(item => item.id);
+  }
+
+  function getUnifiedIdsByKind(kind) {
+    return getUnifiedList()
+      .filter(entry => entry.kind === kind)
+      .map(entry => entry.item.id);
+  }
+
+  function queueInsert(kind, targetId) {
+    if (!targetId) return;
+    pendingInsert = {
+      kind,
+      targetId,
+      existingIds: new Set(getKindIds(kind)),
+    };
+  }
+
+  function handlePendingInsert() {
+    if (!pendingInsert || !currentSheet) return;
+
+    const { kind, targetId, existingIds } = pendingInsert;
+    const allIds = getKindIds(kind);
+    const newIds = allIds.filter(id => !existingIds.has(id));
+
+    if (newIds.length !== 1) {
+      pendingInsert = null;
+      return;
+    }
+
+    const newId = newIds[0];
+    if (!allIds.includes(targetId)) {
+      pendingInsert = null;
+      return;
+    }
+
+    const orderedIds = getUnifiedIdsByKind(kind).filter(id => id !== newId);
+    const targetIndex = orderedIds.indexOf(targetId);
+
+    if (targetIndex === -1) {
+      pendingInsert = null;
+      return;
+    }
+
+    orderedIds.splice(targetIndex + 1, 0, newId);
+    sendReorderForKind(kind, orderedIds);
+    pendingInsert = null;
+  }
+
+  function sendReorderForKind(kind, orderedIds) {
+    if (kind === 'attribute') {
+      sendSheetAction({ type: 'reorderAttributes', sheetId: currentSheetId, attributeIds: orderedIds });
+    } else if (kind === 'rollTemplate') {
+      sendSheetAction({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
+    } else if (kind === 'resource') {
+      sendSheetAction({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
+    } else if (kind === 'heading') {
+      sendSheetAction({ type: 'reorderHeadings', sheetId: currentSheetId, headingIds: orderedIds });
+    }
   }
 
   function createAttributeElement(attr, headingId) {
@@ -687,27 +802,27 @@
     return el;
   }
 
-  function createHeadingElement(attr) {
-    const isEditing = editingAttributeId === attr.id;
+  function createHeadingElement(heading) {
+    const isEditing = editingHeadingId === heading.id;
     const template = isEditing ? templates.headingEdit : templates.headingView;
     const clone = template.content.cloneNode(true);
     const el = clone.querySelector('.attribute-item');
 
-    el.dataset.attributeId = attr.id;
+    el.dataset.headingId = heading.id;
+    el.dataset.attributeId = heading.id;
 
-    if (collapsedHeadings.has(attr.id)) {
+    if (collapsedHeadings.has(heading.id)) {
       el.classList.add('collapsed');
     }
 
     if (isEditing) {
-      setupHeadingEditMode(el, attr);
+      setupHeadingEditMode(el, heading);
     } else {
-      setupHeadingViewMode(el, attr);
+      setupHeadingViewMode(el, heading);
     }
 
-    // Setup drag and drop (only in view mode)
     if (!isEditing) {
-      setupDragAndDrop(el, attr.id);
+      setupHeadingDragAndDrop(el, heading.id);
     }
 
     return el;
@@ -745,15 +860,15 @@
     editBtn.addEventListener('click', () => enterEditMode(attr.id));
   }
 
-  function setupHeadingViewMode(el, attr) {
+  function setupHeadingViewMode(el, heading) {
     const nameEl = el.querySelector('.heading-name');
     const editBtn = el.querySelector('.edit-btn');
     const collapseBtn = el.querySelector('.collapse-btn');
 
-    nameEl.textContent = attr.name;
+    nameEl.textContent = heading.name;
 
-    editBtn.addEventListener('click', () => enterEditMode(attr.id));
-    collapseBtn.addEventListener('click', () => toggleHeadingCollapse(attr.id));
+    editBtn.addEventListener('click', () => enterHeadingEditMode(heading.id));
+    collapseBtn.addEventListener('click', () => toggleHeadingCollapse(heading.id));
   }
 
   function setupEditMode(el, attr) {
@@ -838,29 +953,29 @@
     setTimeout(() => nameInput.focus(), 0);
   }
 
-  function setupHeadingEditMode(el, attr) {
+  function setupHeadingEditMode(el, heading) {
     const nameInput = el.querySelector('.edit-heading-name');
     const saveBtn = el.querySelector('.save-btn');
     const cancelBtn = el.querySelector('.cancel-btn');
     const deleteBtn = el.querySelector('.delete-btn');
 
-    nameInput.value = attr.name;
+    nameInput.value = heading.name;
 
     const handleKeyDown = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        saveHeading(attr.id, nameInput.value);
+        saveHeading(heading.id, nameInput.value);
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        exitEditMode();
+        exitHeadingEditMode();
       }
     };
 
     nameInput.addEventListener('keydown', handleKeyDown);
 
-    saveBtn.addEventListener('click', () => saveHeading(attr.id, nameInput.value));
-    cancelBtn.addEventListener('click', () => exitEditMode());
-    deleteBtn.addEventListener('click', () => deleteAttribute(attr.id));
+    saveBtn.addEventListener('click', () => saveHeading(heading.id, nameInput.value));
+    cancelBtn.addEventListener('click', () => exitHeadingEditMode());
+    deleteBtn.addEventListener('click', () => deleteHeading(heading.id));
 
     setTimeout(() => nameInput.focus(), 0);
   }
@@ -871,12 +986,24 @@
 
   function enterEditMode(attributeId) {
     editingAttributeId = attributeId;
-    renderAttributes();
+    setActiveItem('attribute', attributeId);
+    renderUnifiedList();
   }
 
   function exitEditMode() {
     editingAttributeId = null;
-    renderAttributes();
+    renderUnifiedList();
+  }
+
+  function enterHeadingEditMode(headingId) {
+    editingHeadingId = headingId;
+    setActiveItem('heading', headingId);
+    renderUnifiedList();
+  }
+
+  function exitHeadingEditMode() {
+    editingHeadingId = null;
+    renderUnifiedList();
   }
 
   function saveAttribute(id, name, code, value, type) {
@@ -928,16 +1055,23 @@
       return;
     }
 
-    const attr = currentSheet.attributes.find(a => a.id === id);
-    if (!attr) return;
+    const heading = (currentSheet.headings || []).find(h => h.id === id);
+    if (!heading) return;
 
-    const updatedAttr = {
-      ...attr,
+    const updatedHeading = {
+      ...heading,
       name: name.trim(),
     };
 
-    sendSheetAction({ type: 'updateAttribute', sheetId: currentSheetId, attribute: updatedAttr });
-    exitEditMode();
+    sendSheetAction({ type: 'updateHeading', sheetId: currentSheetId, heading: updatedHeading });
+    exitHeadingEditMode();
+  }
+
+  function deleteHeading(id) {
+    if (confirm('Delete this heading?')) {
+      sendSheetAction({ type: 'deleteHeading', sheetId: currentSheetId, headingId: id });
+      exitHeadingEditMode();
+    }
   }
 
   function deleteAttribute(id) {
@@ -957,7 +1091,7 @@
     } else {
       collapsedHeadings.add(headingId);
     }
-    renderAttributes();
+    renderUnifiedList();
   }
 
   // ============================================================
@@ -996,11 +1130,6 @@
   }
 
   function addAttribute(type) {
-    if (type === 'heading') {
-      addHeading();
-      return;
-    }
-
     const baseName = type === 'string' ? 'Text' : type === 'integer' ? 'Number' : 'Computed';
     const baseCode = type === 'string' ? 'text' : type === 'integer' ? 'num' : 'calc';
 
@@ -1032,6 +1161,9 @@
       attribute.value = '';
     }
 
+    if (activeItem && activeItem.kind === 'attribute') {
+      queueInsert('attribute', activeItem.id);
+    }
     sendSheetAction({ type: 'createAttribute', sheetId: currentSheetId, attribute });
   }
 
@@ -1039,18 +1171,19 @@
     let name = 'New Section';
     let counter = 1;
 
-    while (currentSheet.attributes.some(a => a.type === 'heading' && a.name === name)) {
+    while ((currentSheet.headings || []).some(h => h.name === name)) {
       counter++;
       name = 'New Section ' + counter;
     }
 
-    const attribute = {
+    const heading = {
       name,
-      type: 'heading',
-      collapsed: false,
     };
 
-    sendSheetAction({ type: 'createAttribute', sheetId: currentSheetId, attribute });
+    if (activeItem && activeItem.kind === 'heading') {
+      queueInsert('heading', activeItem.id);
+    }
+    sendSheetAction({ type: 'createHeading', sheetId: currentSheetId, heading });
   }
 
   // ============================================================
@@ -1092,7 +1225,7 @@
 
     draggedEl.classList.add('dragging');
 
-    const items = Array.from(elements.attributesList.querySelectorAll('.attribute-item:not(.collapsed)'));
+    const items = Array.from(elements.attributesList.querySelectorAll('.attribute-item:not(.heading-item):not(.collapsed)'));
     const draggedIndex = items.indexOf(draggedEl);
     const itemHeight = draggedEl.offsetHeight + 4; // Including gap
 
@@ -1136,7 +1269,7 @@
   }
 
   function reorderAttributes(draggedId, targetId) {
-    const items = Array.from(elements.attributesList.querySelectorAll('.attribute-item'));
+    const items = Array.from(elements.attributesList.querySelectorAll('.attribute-item:not(.heading-item)'));
     const orderedIds = items.map(item => item.dataset.attributeId);
 
     const draggedIndex = orderedIds.indexOf(draggedId);
@@ -1148,6 +1281,99 @@
     orderedIds.splice(targetIndex, 0, draggedId);
 
     sendSheetAction({ type: 'reorderAttributes', sheetId: currentSheetId, attributeIds: orderedIds });
+  }
+
+  function setupHeadingDragAndDrop(el, headingId) {
+    const handle = el.querySelector('.drag-handle');
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startHeadingDrag(headingId, e);
+    });
+
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (draggedHeadingId && draggedHeadingId !== headingId) {
+        el.classList.add('drag-over');
+      }
+    });
+
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drag-over');
+    });
+
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      if (draggedHeadingId && draggedHeadingId !== headingId) {
+        reorderHeadings(draggedHeadingId, headingId);
+      }
+    });
+  }
+
+  function startHeadingDrag(headingId, startEvent) {
+    draggedHeadingId = headingId;
+    const draggedEl = elements.attributesList.querySelector(`[data-heading-id="${headingId}"]`);
+    if (!draggedEl) return;
+
+    draggedEl.classList.add('dragging');
+
+    const items = Array.from(elements.attributesList.querySelectorAll('.heading-item:not(.collapsed)'));
+    const draggedIndex = items.indexOf(draggedEl);
+    const itemHeight = draggedEl.offsetHeight + 4;
+
+    let currentIndex = draggedIndex;
+    const startY = startEvent.clientY;
+
+    const onMouseMove = (e) => {
+      const deltaY = e.clientY - startY;
+      const indexDelta = Math.round(deltaY / itemHeight);
+      const newIndex = Math.max(0, Math.min(items.length - 1, draggedIndex + indexDelta));
+
+      if (newIndex !== currentIndex) {
+        items.forEach(item => item.classList.remove('drag-over'));
+        if (newIndex !== draggedIndex) {
+          items[newIndex]?.classList.add('drag-over');
+        }
+        currentIndex = newIndex;
+      }
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+
+      draggedEl.classList.remove('dragging');
+      items.forEach(item => item.classList.remove('drag-over'));
+
+      if (currentIndex !== draggedIndex) {
+        const orderedIds = items.map(item => item.dataset.headingId);
+        const [removed] = orderedIds.splice(draggedIndex, 1);
+        orderedIds.splice(currentIndex, 0, removed);
+
+        sendSheetAction({ type: 'reorderHeadings', sheetId: currentSheetId, headingIds: orderedIds });
+      }
+
+      draggedHeadingId = null;
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
+  function reorderHeadings(draggedId, targetId) {
+    const items = Array.from(elements.attributesList.querySelectorAll('.heading-item'));
+    const orderedIds = items.map(item => item.dataset.headingId);
+
+    const draggedIndex = orderedIds.indexOf(draggedId);
+    const targetIndex = orderedIds.indexOf(targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    orderedIds.splice(draggedIndex, 1);
+    orderedIds.splice(targetIndex, 0, draggedId);
+
+    sendSheetAction({ type: 'reorderHeadings', sheetId: currentSheetId, headingIds: orderedIds });
   }
 
   // ============================================================
@@ -1256,8 +1482,8 @@
       return;
     }
 
-    // Sort by order
-    const sortedTemplates = [...currentSheet.rollTemplates].sort((a, b) => a.order - b.order);
+    // Sort by sort
+    const sortedTemplates = [...currentSheet.rollTemplates].sort((a, b) => a.sort - b.sort);
 
     // Track current heading for indentation
     let currentHeadingId = null;
@@ -1286,7 +1512,7 @@
     if (headingId) {
       el.classList.add('indented');
       el.dataset.headingId = headingId;
-      if (collapsedTemplateHeadings.has(headingId)) {
+      if (collapsedHeadings.has(headingId)) {
         el.classList.add('collapsed');
       }
     }
@@ -1316,7 +1542,7 @@
 
     el.dataset.templateId = template.id;
 
-    if (collapsedTemplateHeadings.has(template.id)) {
+    if (collapsedHeadings.has(template.id)) {
       el.classList.add('collapsed');
     }
 
@@ -1391,12 +1617,12 @@
   }
 
   function toggleTemplateHeadingCollapse(headingId) {
-    if (collapsedTemplateHeadings.has(headingId)) {
-      collapsedTemplateHeadings.delete(headingId);
+    if (collapsedHeadings.has(headingId)) {
+      collapsedHeadings.delete(headingId);
     } else {
-      collapsedTemplateHeadings.add(headingId);
+      collapsedHeadings.add(headingId);
     }
-    renderTemplates();
+    renderUnifiedList();
   }
 
   function setupTemplateViewMode(el, template, validation) {
@@ -1592,12 +1818,13 @@
 
   function enterTemplateEditMode(templateId) {
     editingTemplateId = templateId;
-    renderTemplates();
+    setActiveItem('rollTemplate', templateId);
+    renderUnifiedList();
   }
 
   function exitTemplateEditMode() {
     editingTemplateId = null;
-    renderTemplates();
+    renderUnifiedList();
   }
 
   function saveTemplateWithFormulas(id, name, formulas, displayFormat, superCondition) {
@@ -1660,6 +1887,7 @@
     exitTemplateEditMode();
 
     // Send create request - server will place it at the end, we'll reorder after
+    queueInsert('rollTemplate', id);
     sendSheetAction({ type: 'createRollTemplate', sheetId: currentSheetId, template: duplicateData });
   }
 
@@ -1681,25 +1909,14 @@
       displayFormat: '{name} rolled {result}',
     };
 
+    if (activeItem && activeItem.kind === 'rollTemplate') {
+      queueInsert('rollTemplate', activeItem.id);
+    }
     sendSheetAction({ type: 'createRollTemplate', sheetId: currentSheetId, template });
   }
 
   function addTemplateHeading() {
-    let name = 'New Section';
-    let counter = 1;
-
-    while (currentSheet.rollTemplates.some(t => t.type === 'heading' && t.name === name)) {
-      counter++;
-      name = 'New Section ' + counter;
-    }
-
-    const template = {
-      type: 'heading',
-      name,
-      collapsed: false,
-    };
-
-    sendSheetAction({ type: 'createRollTemplate', sheetId: currentSheetId, template });
+    addHeading();
   }
 
   // ============================================================
@@ -1798,12 +2015,12 @@
 
   function startTemplateDrag(templateId, startEvent) {
     draggedTemplateId = templateId;
-    const draggedEl = elements.templatesList.querySelector(`[data-template-id="${templateId}"]`);
+    const draggedEl = elements.attributesList.querySelector(`[data-template-id="${templateId}"]`);
     if (!draggedEl) return;
 
     draggedEl.classList.add('dragging');
 
-    const items = Array.from(elements.templatesList.querySelectorAll('.template-item:not(.collapsed)'));
+    const items = Array.from(elements.attributesList.querySelectorAll('.template-item:not(.collapsed)'));
     const draggedIndex = items.indexOf(draggedEl);
     const itemHeight = draggedEl.offsetHeight + 8; // Including gap
 
@@ -1847,7 +2064,7 @@
   }
 
   function reorderTemplates(draggedId, targetId) {
-    const items = Array.from(elements.templatesList.querySelectorAll('.template-item'));
+    const items = Array.from(elements.attributesList.querySelectorAll('.template-item'));
     const orderedIds = items.map(item => item.dataset.templateId);
 
     const draggedIndex = orderedIds.indexOf(draggedId);
@@ -1915,8 +2132,8 @@
       return;
     }
 
-    // Sort by order
-    const sortedResources = [...resources].sort((a, b) => a.order - b.order);
+    // Sort by sort
+    const sortedResources = [...resources].sort((a, b) => a.sort - b.sort);
 
     // Track current heading for indentation
     let currentHeadingId = null;
@@ -1945,7 +2162,7 @@
     if (headingId) {
       el.classList.add('indented');
       el.dataset.headingId = headingId;
-      if (collapsedResourceHeadings.has(headingId)) {
+      if (collapsedHeadings.has(headingId)) {
         el.classList.add('collapsed');
       }
     }
@@ -1972,7 +2189,7 @@
 
     el.dataset.resourceId = resource.id;
 
-    if (collapsedResourceHeadings.has(resource.id)) {
+    if (collapsedHeadings.has(resource.id)) {
       el.classList.add('collapsed');
     }
 
@@ -2115,12 +2332,13 @@
 
   function enterResourceEditMode(resourceId) {
     editingResourceId = resourceId;
-    renderResources();
+    setActiveItem('resource', resourceId);
+    renderUnifiedList();
   }
 
   function exitResourceEditMode() {
     editingResourceId = null;
-    renderResources();
+    renderUnifiedList();
   }
 
   function saveResource(id, name, maximum, current, shape, color) {
@@ -2201,6 +2419,7 @@
     exitResourceEditMode();
 
     // Send create request
+    queueInsert('resource', id);
     sendSheetAction({ type: 'createResource', sheetId: currentSheetId, resource: duplicateData });
   }
 
@@ -2223,39 +2442,23 @@
       color: '#6366f1',
     };
 
+    if (activeItem && activeItem.kind === 'resource') {
+      queueInsert('resource', activeItem.id);
+    }
     sendSheetAction({ type: 'createResource', sheetId: currentSheetId, resource });
   }
 
   function addResourceHeading() {
-    let name = 'New Section';
-    let counter = 1;
-
-    const resources = currentSheet.resources || [];
-    while (resources.some(r => r.type === 'heading' && r.name === name)) {
-      counter++;
-      name = 'New Section ' + counter;
-    }
-
-    const resource = {
-      type: 'heading',
-      name,
-      collapsed: false,
-    };
-
-    sendSheetAction({ type: 'createResource', sheetId: currentSheetId, resource });
+    addHeading();
   }
 
-  // ============================================================
-  // Resource Heading Collapse
-  // ============================================================
-
   function toggleResourceHeadingCollapse(headingId) {
-    if (collapsedResourceHeadings.has(headingId)) {
-      collapsedResourceHeadings.delete(headingId);
+    if (collapsedHeadings.has(headingId)) {
+      collapsedHeadings.delete(headingId);
     } else {
-      collapsedResourceHeadings.add(headingId);
+      collapsedHeadings.add(headingId);
     }
-    renderResources();
+    renderUnifiedList();
   }
 
   // ============================================================
@@ -2314,12 +2517,12 @@
 
   function startResourceDrag(resourceId, startEvent) {
     draggedResourceId = resourceId;
-    const draggedEl = elements.resourcesList.querySelector(`[data-resource-id="${resourceId}"]`);
+    const draggedEl = elements.attributesList.querySelector(`[data-resource-id="${resourceId}"]`);
     if (!draggedEl) return;
 
     draggedEl.classList.add('dragging');
 
-    const items = Array.from(elements.resourcesList.querySelectorAll('.resource-item:not(.collapsed)'));
+    const items = Array.from(elements.attributesList.querySelectorAll('.resource-item:not(.collapsed)'));
     const draggedIndex = items.indexOf(draggedEl);
     const itemHeight = draggedEl.offsetHeight + 4; // Including gap
 
@@ -2363,7 +2566,7 @@
   }
 
   function reorderResources(draggedId, targetId) {
-    const items = Array.from(elements.resourcesList.querySelectorAll('.resource-item'));
+    const items = Array.from(elements.attributesList.querySelectorAll('.resource-item'));
     const orderedIds = items.map(item => item.dataset.resourceId);
 
     const draggedIndex = orderedIds.indexOf(draggedId);
@@ -2839,14 +3042,14 @@
     // Read-only toggle
     elements.readOnlyToggle.addEventListener('click', toggleReadOnly);
 
-    elements.addHeadingBtn.addEventListener('click', () => addAttribute('heading'));
+    elements.addHeadingBtn.addEventListener('click', addHeading);
     elements.addStringAttrBtn.addEventListener('click', () => addAttribute('string'));
     elements.addIntegerAttrBtn.addEventListener('click', () => addAttribute('integer'));
     elements.addDerivedAttrBtn.addEventListener('click', () => addAttribute('derived'));
     elements.addTemplateBtn.addEventListener('click', addRollTemplate);
-    elements.addTemplateHeadingBtn.addEventListener('click', addTemplateHeading);
+    elements.addTemplateHeadingBtn.addEventListener('click', addHeading);
     elements.addResourceBtn.addEventListener('click', addResource);
-    elements.addResourceHeadingBtn.addEventListener('click', addResourceHeading);
+    elements.addResourceHeadingBtn.addEventListener('click', addHeading);
 
     elements.deleteModal.addEventListener('click', (e) => {
       if (e.target === elements.deleteModal) {

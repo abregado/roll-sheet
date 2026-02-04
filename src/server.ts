@@ -873,6 +873,88 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
       break;
     }
 
+    case 'createHeading': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Create heading')) {
+          break;
+        }
+        const newHeading: Heading = {
+          ...message.heading,
+          id: generateId(),
+          sort: 0,
+        };
+        insertAfterLastKind(sheet, 'heading', newHeading);
+        touchSheet(sheet);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'updateHeading': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Update heading')) {
+          break;
+        }
+        const headingIndex = sheet.headings.findIndex((h) => h.id === message.heading.id);
+        if (headingIndex !== -1) {
+          sheet.headings[headingIndex] = message.heading;
+          sortSheetLists(sheet);
+          touchSheet(sheet);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Heading not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'deleteHeading': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Delete heading')) {
+          break;
+        }
+        const headingIndex = sheet.headings.findIndex((h) => h.id === message.headingId);
+        if (headingIndex !== -1) {
+          sheet.headings.splice(headingIndex, 1);
+          assignSortFromUnifiedList(buildUnifiedList(sheet));
+          sortSheetLists(sheet);
+          touchSheet(sheet);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Heading not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'reorderHeadings': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Reorder headings')) {
+          break;
+        }
+        reorderKind(sheet, 'heading', message.headingIds);
+        touchSheet(sheet);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
     case 'getHistory': {
       send(ws, { type: 'history', entries: history });
       break;
