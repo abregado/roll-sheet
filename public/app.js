@@ -115,6 +115,14 @@
     }
   }
 
+  function sendSheetAction(message) {
+    if (!currentSheet || typeof currentSheet.version !== 'number') {
+      console.warn('Sheet version not available; action ignored:', message.type);
+      return;
+    }
+    send({ ...message, sheetVersion: currentSheet.version });
+  }
+
   function handleServerMessage(message) {
     switch (message.type) {
       case 'sheetList':
@@ -198,6 +206,13 @@
 
       case 'historyCleared':
         elements.historyList.innerHTML = '<div class="empty-state">No rolls yet</div>';
+        break;
+
+      case 'reject':
+        if (message.sheetId === currentSheetId) {
+          alert(message.reason);
+          send({ type: 'getSheet', sheetId: currentSheetId });
+        }
         break;
 
       case 'error':
@@ -480,7 +495,7 @@
       initials = initials.substring(0, 2);
     }
 
-    send({
+    sendSheetAction({
       type: 'updateSheet',
       sheetId: currentSheetId,
       name: name,
@@ -502,7 +517,7 @@
 
   function copySheet() {
     if (currentSheetId) {
-      send({ type: 'copySheet', sheetId: currentSheetId });
+      sendSheetAction({ type: 'copySheet', sheetId: currentSheetId });
     }
   }
 
@@ -583,7 +598,7 @@
 
   function confirmDeleteSheet() {
     if (currentSheetId) {
-      send({ type: 'deleteSheet', sheetId: currentSheetId });
+      sendSheetAction({ type: 'deleteSheet', sheetId: currentSheetId });
     }
     elements.deleteModal.hidden = true;
   }
@@ -903,7 +918,7 @@
       };
     }
 
-    send({ type: 'updateAttribute', sheetId: currentSheetId, attribute: updatedAttr });
+    sendSheetAction({ type: 'updateAttribute', sheetId: currentSheetId, attribute: updatedAttr });
     exitEditMode();
   }
 
@@ -921,13 +936,13 @@
       name: name.trim(),
     };
 
-    send({ type: 'updateAttribute', sheetId: currentSheetId, attribute: updatedAttr });
+    sendSheetAction({ type: 'updateAttribute', sheetId: currentSheetId, attribute: updatedAttr });
     exitEditMode();
   }
 
   function deleteAttribute(id) {
     if (confirm('Delete this attribute?')) {
-      send({ type: 'deleteAttribute', sheetId: currentSheetId, attributeId: id });
+      sendSheetAction({ type: 'deleteAttribute', sheetId: currentSheetId, attributeId: id });
       exitEditMode();
     }
   }
@@ -1017,7 +1032,7 @@
       attribute.value = '';
     }
 
-    send({ type: 'createAttribute', sheetId: currentSheetId, attribute });
+    sendSheetAction({ type: 'createAttribute', sheetId: currentSheetId, attribute });
   }
 
   function addHeading() {
@@ -1035,7 +1050,7 @@
       collapsed: false,
     };
 
-    send({ type: 'createAttribute', sheetId: currentSheetId, attribute });
+    sendSheetAction({ type: 'createAttribute', sheetId: currentSheetId, attribute });
   }
 
   // ============================================================
@@ -1110,7 +1125,7 @@
         const [removed] = orderedIds.splice(draggedIndex, 1);
         orderedIds.splice(currentIndex, 0, removed);
 
-        send({ type: 'reorderAttributes', sheetId: currentSheetId, attributeIds: orderedIds });
+        sendSheetAction({ type: 'reorderAttributes', sheetId: currentSheetId, attributeIds: orderedIds });
       }
 
       draggedAttributeId = null;
@@ -1132,7 +1147,7 @@
     orderedIds.splice(draggedIndex, 1);
     orderedIds.splice(targetIndex, 0, draggedId);
 
-    send({ type: 'reorderAttributes', sheetId: currentSheetId, attributeIds: orderedIds });
+    sendSheetAction({ type: 'reorderAttributes', sheetId: currentSheetId, attributeIds: orderedIds });
   }
 
   // ============================================================
@@ -1371,7 +1386,7 @@
       name: name.trim(),
     };
 
-    send({ type: 'updateRollTemplate', sheetId: currentSheetId, template: updatedTemplate });
+    sendSheetAction({ type: 'updateRollTemplate', sheetId: currentSheetId, template: updatedTemplate });
     exitTemplateEditMode();
   }
 
@@ -1613,13 +1628,13 @@
       superCondition: (superCondition || '').trim(),
     };
 
-    send({ type: 'updateRollTemplate', sheetId: currentSheetId, template: updatedTemplate });
+    sendSheetAction({ type: 'updateRollTemplate', sheetId: currentSheetId, template: updatedTemplate });
     exitTemplateEditMode();
   }
 
   function deleteTemplate(id) {
     if (confirm('Delete this roll template?')) {
-      send({ type: 'deleteRollTemplate', sheetId: currentSheetId, templateId: id });
+      sendSheetAction({ type: 'deleteRollTemplate', sheetId: currentSheetId, templateId: id });
       exitTemplateEditMode();
     }
   }
@@ -1645,7 +1660,7 @@
     exitTemplateEditMode();
 
     // Send create request - server will place it at the end, we'll reorder after
-    send({ type: 'createRollTemplate', sheetId: currentSheetId, template: duplicateData });
+    sendSheetAction({ type: 'createRollTemplate', sheetId: currentSheetId, template: duplicateData });
   }
 
   function addRollTemplate() {
@@ -1666,7 +1681,7 @@
       displayFormat: '{name} rolled {result}',
     };
 
-    send({ type: 'createRollTemplate', sheetId: currentSheetId, template });
+    sendSheetAction({ type: 'createRollTemplate', sheetId: currentSheetId, template });
   }
 
   function addTemplateHeading() {
@@ -1684,7 +1699,7 @@
       collapsed: false,
     };
 
-    send({ type: 'createRollTemplate', sheetId: currentSheetId, template });
+    sendSheetAction({ type: 'createRollTemplate', sheetId: currentSheetId, template });
   }
 
   // ============================================================
@@ -1821,7 +1836,7 @@
         const [removed] = orderedIds.splice(draggedIndex, 1);
         orderedIds.splice(currentIndex, 0, removed);
 
-        send({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
+        sendSheetAction({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
       }
 
       draggedTemplateId = null;
@@ -1843,7 +1858,7 @@
     orderedIds.splice(draggedIndex, 1);
     orderedIds.splice(targetIndex, 0, draggedId);
 
-    send({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
+    sendSheetAction({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
   }
 
   // ============================================================
@@ -2134,7 +2149,7 @@
       color: color,
     };
 
-    send({ type: 'updateResource', sheetId: currentSheetId, resource: updatedResource });
+    sendSheetAction({ type: 'updateResource', sheetId: currentSheetId, resource: updatedResource });
     exitResourceEditMode();
   }
 
@@ -2152,13 +2167,13 @@
       name: name.trim(),
     };
 
-    send({ type: 'updateResource', sheetId: currentSheetId, resource: updatedResource });
+    sendSheetAction({ type: 'updateResource', sheetId: currentSheetId, resource: updatedResource });
     exitResourceEditMode();
   }
 
   function deleteResource(id) {
     if (confirm('Delete this resource?')) {
-      send({ type: 'deleteResource', sheetId: currentSheetId, resourceId: id });
+      sendSheetAction({ type: 'deleteResource', sheetId: currentSheetId, resourceId: id });
       exitResourceEditMode();
     }
   }
@@ -2186,7 +2201,7 @@
     exitResourceEditMode();
 
     // Send create request
-    send({ type: 'createResource', sheetId: currentSheetId, resource: duplicateData });
+    sendSheetAction({ type: 'createResource', sheetId: currentSheetId, resource: duplicateData });
   }
 
   function addResource() {
@@ -2208,7 +2223,7 @@
       color: '#6366f1',
     };
 
-    send({ type: 'createResource', sheetId: currentSheetId, resource });
+    sendSheetAction({ type: 'createResource', sheetId: currentSheetId, resource });
   }
 
   function addResourceHeading() {
@@ -2227,7 +2242,7 @@
       collapsed: false,
     };
 
-    send({ type: 'createResource', sheetId: currentSheetId, resource });
+    sendSheetAction({ type: 'createResource', sheetId: currentSheetId, resource });
   }
 
   // ============================================================
@@ -2262,7 +2277,7 @@
 
     // Send update to server
     const updated = { ...resource, current: newCurrent };
-    send({ type: 'updateResource', sheetId: currentSheetId, resource: updated });
+    sendSheetAction({ type: 'updateResource', sheetId: currentSheetId, resource: updated });
   }
 
   // ============================================================
@@ -2337,7 +2352,7 @@
         const [removed] = orderedIds.splice(draggedIndex, 1);
         orderedIds.splice(currentIndex, 0, removed);
 
-        send({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
+        sendSheetAction({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
       }
 
       draggedResourceId = null;
@@ -2359,7 +2374,7 @@
     orderedIds.splice(draggedIndex, 1);
     orderedIds.splice(targetIndex, 0, draggedId);
 
-    send({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
+    sendSheetAction({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
   }
 
   // ============================================================

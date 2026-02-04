@@ -8,6 +8,7 @@ import {
   RollTemplate,
   RollTemplateRoll,
   Resource,
+  Heading,
   HistoryEntry,
   ClientMessage,
   ServerMessage,
@@ -19,6 +20,8 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, '../data');
 const SHEETS_FILE = path.join(DATA_DIR, 'sheets.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+const CURRENT_SCHEMA_VERSION = 2;
+const SORT_STEP = 1000;
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -28,13 +31,27 @@ if (!fs.existsSync(DATA_DIR)) {
 // In-memory data store
 let sheets: CharacterSheet[] = loadSheets();
 let history: HistoryEntry[] = loadHistory();
+resetSheetVersions();
 
 // Load sheets from file
 function loadSheets(): CharacterSheet[] {
   try {
     if (fs.existsSync(SHEETS_FILE)) {
       const data = fs.readFileSync(SHEETS_FILE, 'utf-8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      const rawSheets = Array.isArray(parsed) ? parsed : [];
+      let changed = false;
+      const normalized = rawSheets.map((raw) => {
+        const result = normalizeSheet(raw as Partial<CharacterSheet>);
+        if (result.changed) {
+          changed = true;
+        }
+        return result.sheet;
+      });
+      if (changed) {
+        fs.writeFileSync(SHEETS_FILE, JSON.stringify(normalized, null, 2));
+      }
+      return normalized;
     }
   } catch (err) {
     console.error('Error loading sheets:', err);
@@ -74,6 +91,314 @@ function saveHistory(): void {
   }
 }
 
+function resetSheetVersions(): void {
+  sheets.forEach((sheet) => {
+    sheet.version = 0;
+  });
+}
+
+type UnifiedItem =
+  | { kind: 'attribute'; item: Attribute }
+  | { kind: 'rollTemplate'; item: RollTemplate }
+  | { kind: 'resource'; item: Resource }
+  | { kind: 'heading'; item: Heading };
+
+function buildUnifiedList(sheet: CharacterSheet): UnifiedItem[] {
+  return [
+    ...sheet.attributes.map((item) => ({ kind: 'attribute' as const, item })),
+    ...sheet.rollTemplates.map((item) => ({ kind: 'rollTemplate' as const, item })),
+    ...sheet.resources.map((item) => ({ kind: 'resource' as const, item })),
+    ...sheet.headings.map((item) => ({ kind: 'heading' as const, item })),
+  ].sort((a, b) => {
+    if (a.item.sort !== b.item.sort) {
+      return a.item.sort - b.item.sort;
+    }
+    const kindCompare = a.kind.localeCompare(b.kind);
+    if (kindCompare !== 0) {
+      return kindCompare;
+    }
+    return a.item.id.localeCompare(b.item.id);
+  });
+}
+
+function assignSortFromUnifiedList(unified: UnifiedItem[]): void {
+  unified.forEach((entry, index) => {
+    entry.item.sort = index * SORT_STEP;
+  });
+}
+
+function sortSheetLists(sheet: CharacterSheet): void {
+  sheet.attributes.sort((a, b) => a.sort - b.sort);
+  sheet.rollTemplates.sort((a, b) => a.sort - b.sort);
+  sheet.resources.sort((a, b) => a.sort - b.sort);
+  sheet.headings.sort((a, b) => a.sort - b.sort);
+}
+
+function touchSheet(sheet: CharacterSheet): void {
+  sheet.version = (sheet.version ?? 0) + 1;
+}
+
+function rejectSheetAction(ws: WebSocket, sheet: CharacterSheet, reason: string): void {
+  send(ws, { type: 'reject', sheetId: sheet.id, sheetVersion: sheet.version ?? 0, reason });
+}
+
+function ensureSheetVersion(
+  ws: WebSocket,
+  sheet: CharacterSheet,
+  message: { sheetVersion?: number },
+  action: string
+): boolean {
+  if (typeof message.sheetVersion !== 'number') {
+    rejectSheetAction(ws, sheet, `${action} rejected: missing sheetVersion`);
+    return false;
+  }
+  if (message.sheetVersion !== sheet.version) {
+    rejectSheetAction(ws, sheet, `${action} rejected: sheet out of date`);
+    return false;
+  }
+  return true;
+}
+
+function insertAfterLastKind(
+  sheet: CharacterSheet,
+  kind: UnifiedItem['kind'],
+  newItem: UnifiedItem['item']
+): void {
+  const unified = buildUnifiedList(sheet);
+  const lastIndex = unified.reduce(
+    (last, entry, index) => (entry.kind === kind ? index : last),
+    -1
+  );
+  const insertIndex = lastIndex === -1 ? unified.length : lastIndex + 1;
+  unified.splice(insertIndex, 0, { kind, item: newItem } as UnifiedItem);
+  assignSortFromUnifiedList(unified);
+
+  if (kind === 'attribute') {
+    sheet.attributes.push(newItem as Attribute);
+  } else if (kind === 'rollTemplate') {
+    sheet.rollTemplates.push(newItem as RollTemplate);
+  } else if (kind === 'resource') {
+    sheet.resources.push(newItem as Resource);
+  } else {
+    sheet.headings.push(newItem as Heading);
+  }
+  sortSheetLists(sheet);
+}
+
+function reorderKind(
+  sheet: CharacterSheet,
+  kind: UnifiedItem['kind'],
+  orderedIds: string[]
+): void {
+  const unified = buildUnifiedList(sheet);
+  const currentItems =
+    kind === 'attribute'
+      ? sheet.attributes
+      : kind === 'rollTemplate'
+        ? sheet.rollTemplates
+        : kind === 'resource'
+          ? sheet.resources
+          : sheet.headings;
+
+  const itemById = new Map(currentItems.map((item) => [item.id, item]));
+  const orderedItems: UnifiedItem['item'][] = [];
+  const seen = new Set<string>();
+
+  orderedIds.forEach((id) => {
+    const item = itemById.get(id);
+    if (item) {
+      orderedItems.push(item);
+      seen.add(id);
+    }
+  });
+
+  currentItems.forEach((item) => {
+    if (!seen.has(item.id)) {
+      orderedItems.push(item);
+    }
+  });
+
+  let index = 0;
+  unified.forEach((entry) => {
+    if (entry.kind === kind) {
+      entry.item = orderedItems[index++] as typeof entry.item;
+    }
+  });
+
+  assignSortFromUnifiedList(unified);
+  sortSheetLists(sheet);
+}
+
+function hasLegacyHeading(items: unknown[]): boolean {
+  return items.some((item) => typeof item === 'object' && item !== null && 'type' in item && (item as { type?: string }).type === 'heading');
+}
+
+function sortLegacyByOrder<T>(items: T[]): T[] {
+  const hasOrder = items.every((item) => {
+    if (typeof item !== 'object' || item === null) {
+      return false;
+    }
+    return typeof (item as { order?: unknown }).order === 'number';
+  });
+  if (hasOrder) {
+    return [...items].sort((a, b) => {
+      const aOrder = (a as { order?: number }).order ?? 0;
+      const bOrder = (b as { order?: number }).order ?? 0;
+      return aOrder - bOrder;
+    });
+  }
+  return items;
+}
+
+function migrateLegacySheet(raw: Partial<CharacterSheet>): CharacterSheet {
+  const legacyAttributes = sortLegacyByOrder(
+    (raw.attributes ?? []).filter((item: any) => item?.type !== 'heading')
+  );
+  const legacyTemplates = sortLegacyByOrder(
+    (raw.rollTemplates ?? []).filter((item: any) => item?.type !== 'heading')
+  );
+  const legacyResources = sortLegacyByOrder(
+    (raw.resources ?? []).filter((item: any) => item?.type !== 'heading')
+  );
+
+  let sortIndex = 0;
+  const attributes: Attribute[] = legacyAttributes.map((item: any) => {
+    const { order, ...rest } = item;
+    return {
+      ...rest,
+      id: item.id || generateId(),
+      sort: sortIndex++ * SORT_STEP,
+    } as Attribute;
+  });
+
+  const rollTemplates: RollTemplate[] = legacyTemplates.map((item: any) => {
+    const { order, ...rest } = item;
+    return {
+      ...rest,
+      id: item.id || generateId(),
+      sort: sortIndex++ * SORT_STEP,
+    } as RollTemplate;
+  });
+
+  const resources: Resource[] = legacyResources.map((item: any) => {
+    const { order, ...rest } = item;
+    return {
+      ...rest,
+      id: item.id || generateId(),
+      sort: sortIndex++ * SORT_STEP,
+    } as Resource;
+  });
+
+  return {
+    id: raw.id || generateId(),
+    name: raw.name || 'New Character',
+    initials: raw.initials,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    version: typeof raw.version === 'number' ? raw.version : 0,
+    attributes,
+    rollTemplates,
+    resources,
+    headings: [],
+  };
+}
+
+function normalizeSheet(raw: Partial<CharacterSheet>): { sheet: CharacterSheet; changed: boolean } {
+  const schemaVersion = typeof raw.schemaVersion === 'number' ? raw.schemaVersion : 1;
+  if (schemaVersion < CURRENT_SCHEMA_VERSION) {
+    return { sheet: migrateLegacySheet(raw), changed: true };
+  }
+
+  const sheet: CharacterSheet = {
+    id: raw.id || generateId(),
+    name: raw.name || 'New Character',
+    initials: raw.initials,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    version: typeof raw.version === 'number' ? raw.version : 0,
+    attributes: Array.isArray(raw.attributes) ? raw.attributes : [],
+    rollTemplates: Array.isArray(raw.rollTemplates) ? raw.rollTemplates : [],
+    resources: Array.isArray(raw.resources) ? raw.resources : [],
+    headings: Array.isArray(raw.headings) ? raw.headings : [],
+  };
+
+  const unified = buildUnifiedList(sheet);
+  const needsSort = unified.some((entry) => typeof entry.item.sort !== 'number' || Number.isNaN(entry.item.sort));
+  if (needsSort) {
+    assignSortFromUnifiedList(unified);
+  }
+  sortSheetLists(sheet);
+
+  return { sheet, changed: needsSort || schemaVersion !== CURRENT_SCHEMA_VERSION };
+}
+
+function buildImportedSheet(sheetData: ExportedSheet): CharacterSheet {
+  const attributes = Array.isArray(sheetData.attributes) ? sheetData.attributes : [];
+  const rollTemplates = Array.isArray(sheetData.rollTemplates) ? sheetData.rollTemplates : [];
+  const resources = Array.isArray(sheetData.resources) ? sheetData.resources : [];
+  const headings = Array.isArray(sheetData.headings) ? sheetData.headings : [];
+
+  const legacyImport =
+    hasLegacyHeading(attributes as unknown[]) ||
+    hasLegacyHeading(rollTemplates as unknown[]) ||
+    hasLegacyHeading(resources as unknown[]);
+
+  if (legacyImport) {
+    let sortIndex = 0;
+    const migratedAttributes = sortLegacyByOrder(
+      (attributes as any[]).filter((item) => item?.type !== 'heading')
+    ).map((item) => {
+      const { order, ...rest } = item;
+      return { ...rest, id: generateId(), sort: sortIndex++ * SORT_STEP } as Attribute;
+    });
+
+    const migratedTemplates = sortLegacyByOrder(
+      (rollTemplates as any[]).filter((item) => item?.type !== 'heading')
+    ).map((item) => {
+      const { order, ...rest } = item;
+      return { ...rest, id: generateId(), sort: sortIndex++ * SORT_STEP } as RollTemplate;
+    });
+
+    const migratedResources = sortLegacyByOrder(
+      (resources as any[]).filter((item) => item?.type !== 'heading')
+    ).map((item) => {
+      const { order, ...rest } = item;
+      return { ...rest, id: generateId(), sort: sortIndex++ * SORT_STEP } as Resource;
+    });
+
+    return {
+      id: generateId(),
+      name: sheetData.name,
+      initials: sheetData.initials,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      version: 0,
+      attributes: migratedAttributes,
+      rollTemplates: migratedTemplates,
+      resources: migratedResources,
+      headings: [],
+    };
+  }
+
+  const importedSheet: CharacterSheet = {
+    id: generateId(),
+    name: sheetData.name,
+    initials: sheetData.initials,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    version: 0,
+    attributes: attributes.map((attr) => ({ ...attr, id: generateId() })) as Attribute[],
+    rollTemplates: rollTemplates.map((tmpl) => ({ ...tmpl, id: generateId() })) as RollTemplate[],
+    resources: resources.map((res) => ({ ...res, id: generateId() })) as Resource[],
+    headings: headings.map((heading) => ({ ...heading, id: generateId() })) as Heading[],
+  };
+
+  const unified = buildUnifiedList(importedSheet);
+  const needsSort = unified.some((entry) => typeof entry.item.sort !== 'number' || Number.isNaN(entry.item.sort));
+  if (needsSort) {
+    assignSortFromUnifiedList(unified);
+  }
+  sortSheetLists(importedSheet);
+
+  return importedSheet;
+}
+
 // Generate unique ID
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -84,9 +409,12 @@ function createDefaultSheet(name?: string): CharacterSheet {
   return {
     id: generateId(),
     name: name || 'New Character',
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    version: 0,
     attributes: [],
     rollTemplates: [],
     resources: [],
+    headings: [],
   };
 }
 
@@ -186,26 +514,7 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
       }
 
       // Create new sheet with imported data
-      const importedSheet: CharacterSheet = {
-        id: generateId(),
-        name: sheetData.name,
-        initials: sheetData.initials,
-        attributes: (sheetData.attributes || []).map((attr, index) => ({
-          ...attr,
-          id: generateId(),
-          order: index,
-        } as Attribute)),
-        rollTemplates: (sheetData.rollTemplates || []).map((tmpl, index) => ({
-          ...tmpl,
-          id: generateId(),
-          order: index,
-        } as RollTemplate)),
-        resources: (sheetData.resources || []).map((res, index) => ({
-          ...res,
-          id: generateId(),
-          order: index,
-        } as Resource)),
-      };
+      const importedSheet = buildImportedSheet(sheetData);
 
       sheets.push(importedSheet);
       saveSheets();
@@ -216,10 +525,15 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'copySheet': {
       const sourceSheet = sheets.find((s) => s.id === message.sheetId);
       if (sourceSheet) {
+        if (!ensureSheetVersion(ws, sourceSheet, message, 'Copy sheet')) {
+          break;
+        }
         const copiedSheet: CharacterSheet = {
           ...JSON.parse(JSON.stringify(sourceSheet)),
           id: generateId(),
           name: sourceSheet.name + ' (Copy)',
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+          version: 0,
         };
         // Generate new IDs for attributes, templates, and resources
         copiedSheet.attributes = copiedSheet.attributes.map((attr) => ({
@@ -234,6 +548,10 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
           ...res,
           id: generateId(),
         }));
+        copiedSheet.headings = (copiedSheet.headings || []).map((heading) => ({
+          ...heading,
+          id: generateId(),
+        }));
         sheets.push(copiedSheet);
         saveSheets();
         broadcast({ type: 'sheetCreated', sheet: copiedSheet });
@@ -246,6 +564,9 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'deleteSheet': {
       const index = sheets.findIndex((s) => s.id === message.sheetId);
       if (index !== -1) {
+        if (!ensureSheetVersion(ws, sheets[index], message, 'Delete sheet')) {
+          break;
+        }
         sheets.splice(index, 1);
         // Ensure at least one sheet exists
         if (sheets.length === 0) {
@@ -263,6 +584,9 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'updateSheet': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Update sheet')) {
+          break;
+        }
         sheet.name = message.name;
         sheet.initials = message.initials || undefined;
         // Also update the 'name' string attribute if it exists
@@ -272,6 +596,7 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
         if (nameAttr && nameAttr.type === 'string') {
           nameAttr.value = message.name;
         }
+        touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
         // Also update sheet list
@@ -286,19 +611,22 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'createAttribute': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Create attribute')) {
+          break;
+        }
         // Check for reserved codes
         const attrCode = 'code' in message.attribute ? String(message.attribute.code) : null;
         if (attrCode && isReservedCode(attrCode)) {
           send(ws, { type: 'error', message: `"${attrCode}" is a reserved code and cannot be used` });
           break;
         }
-        const maxOrder = sheet.attributes.reduce((max, attr) => Math.max(max, attr.order), -1);
         const newAttribute: Attribute = {
           ...message.attribute,
           id: generateId(),
-          order: maxOrder + 1,
+          sort: 0,
         } as Attribute;
-        sheet.attributes.push(newAttribute);
+        insertAfterLastKind(sheet, 'attribute', newAttribute);
+        touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
       } else {
@@ -310,6 +638,9 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'updateAttribute': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Update attribute')) {
+          break;
+        }
         // Check for reserved codes
         const attrCode = 'code' in message.attribute ? String(message.attribute.code) : null;
         if (attrCode && isReservedCode(attrCode)) {
@@ -319,6 +650,8 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
         const attrIndex = sheet.attributes.findIndex((a) => a.id === message.attribute.id);
         if (attrIndex !== -1) {
           sheet.attributes[attrIndex] = message.attribute;
+          sortSheetLists(sheet);
+          touchSheet(sheet);
           // Update sheet name if the 'name' attribute was changed
           if (message.attribute.type === 'string' && message.attribute.code === 'name') {
             sheet.name = message.attribute.value;
@@ -340,9 +673,15 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'deleteAttribute': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Delete attribute')) {
+          break;
+        }
         const attrIndex = sheet.attributes.findIndex((a) => a.id === message.attributeId);
         if (attrIndex !== -1) {
           sheet.attributes.splice(attrIndex, 1);
+          assignSortFromUnifiedList(buildUnifiedList(sheet));
+          sortSheetLists(sheet);
+          touchSheet(sheet);
           saveSheets();
           broadcast({ type: 'sheetUpdated', sheet });
         } else {
@@ -357,15 +696,11 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'reorderAttributes': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
-        // Update order based on the provided array of IDs
-        message.attributeIds.forEach((id, index) => {
-          const attr = sheet.attributes.find((a) => a.id === id);
-          if (attr) {
-            attr.order = index;
-          }
-        });
-        // Sort by order
-        sheet.attributes.sort((a, b) => a.order - b.order);
+        if (!ensureSheetVersion(ws, sheet, message, 'Reorder attributes')) {
+          break;
+        }
+        reorderKind(sheet, 'attribute', message.attributeIds);
+        touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
       } else {
@@ -377,13 +712,16 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'createRollTemplate': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
-        const maxOrder = sheet.rollTemplates.reduce((max, t) => Math.max(max, t.order), -1);
+        if (!ensureSheetVersion(ws, sheet, message, 'Create roll template')) {
+          break;
+        }
         const newTemplate = {
           ...message.template,
           id: generateId(),
-          order: maxOrder + 1,
+          sort: 0,
         } as RollTemplate;
-        sheet.rollTemplates.push(newTemplate);
+        insertAfterLastKind(sheet, 'rollTemplate', newTemplate);
+        touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
       } else {
@@ -395,9 +733,14 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'updateRollTemplate': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Update roll template')) {
+          break;
+        }
         const templateIndex = sheet.rollTemplates.findIndex((t) => t.id === message.template.id);
         if (templateIndex !== -1) {
           sheet.rollTemplates[templateIndex] = message.template;
+          sortSheetLists(sheet);
+          touchSheet(sheet);
           saveSheets();
           broadcast({ type: 'sheetUpdated', sheet });
         } else {
@@ -412,9 +755,15 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'deleteRollTemplate': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Delete roll template')) {
+          break;
+        }
         const templateIndex = sheet.rollTemplates.findIndex((t) => t.id === message.templateId);
         if (templateIndex !== -1) {
           sheet.rollTemplates.splice(templateIndex, 1);
+          assignSortFromUnifiedList(buildUnifiedList(sheet));
+          sortSheetLists(sheet);
+          touchSheet(sheet);
           saveSheets();
           broadcast({ type: 'sheetUpdated', sheet });
         } else {
@@ -429,13 +778,11 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'reorderRollTemplates': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
-        message.templateIds.forEach((id, index) => {
-          const template = sheet.rollTemplates.find((t) => t.id === id);
-          if (template) {
-            template.order = index;
-          }
-        });
-        sheet.rollTemplates.sort((a, b) => a.order - b.order);
+        if (!ensureSheetVersion(ws, sheet, message, 'Reorder roll templates')) {
+          break;
+        }
+        reorderKind(sheet, 'rollTemplate', message.templateIds);
+        touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
       } else {
@@ -447,14 +794,16 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'createResource': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
-        if (!sheet.resources) sheet.resources = [];
-        const maxOrder = sheet.resources.reduce((max, res) => Math.max(max, res.order), -1);
+        if (!ensureSheetVersion(ws, sheet, message, 'Create resource')) {
+          break;
+        }
         const newResource = {
           ...message.resource,
           id: generateId(),
-          order: maxOrder + 1,
+          sort: 0,
         } as Resource;
-        sheet.resources.push(newResource);
+        insertAfterLastKind(sheet, 'resource', newResource);
+        touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
       } else {
@@ -466,10 +815,14 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'updateResource': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
-        if (!sheet.resources) sheet.resources = [];
+        if (!ensureSheetVersion(ws, sheet, message, 'Update resource')) {
+          break;
+        }
         const resIndex = sheet.resources.findIndex((r) => r.id === message.resource.id);
         if (resIndex !== -1) {
           sheet.resources[resIndex] = message.resource;
+          sortSheetLists(sheet);
+          touchSheet(sheet);
           saveSheets();
           broadcast({ type: 'sheetUpdated', sheet });
         } else {
@@ -484,10 +837,15 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'deleteResource': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
-        if (!sheet.resources) sheet.resources = [];
+        if (!ensureSheetVersion(ws, sheet, message, 'Delete resource')) {
+          break;
+        }
         const resIndex = sheet.resources.findIndex((r) => r.id === message.resourceId);
         if (resIndex !== -1) {
           sheet.resources.splice(resIndex, 1);
+          assignSortFromUnifiedList(buildUnifiedList(sheet));
+          sortSheetLists(sheet);
+          touchSheet(sheet);
           saveSheets();
           broadcast({ type: 'sheetUpdated', sheet });
         } else {
@@ -502,14 +860,11 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
     case 'reorderResources': {
       const sheet = sheets.find((s) => s.id === message.sheetId);
       if (sheet) {
-        if (!sheet.resources) sheet.resources = [];
-        message.resourceIds.forEach((id, index) => {
-          const resource = sheet.resources.find((r) => r.id === id);
-          if (resource) {
-            resource.order = index;
-          }
-        });
-        sheet.resources.sort((a, b) => a.order - b.order);
+        if (!ensureSheetVersion(ws, sheet, message, 'Reorder resources')) {
+          break;
+        }
+        reorderKind(sheet, 'resource', message.resourceIds);
+        touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });
       } else {

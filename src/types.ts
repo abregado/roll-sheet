@@ -1,11 +1,11 @@
 // Attribute types
-export type AttributeType = 'string' | 'integer' | 'derived' | 'heading';
+export type AttributeType = 'string' | 'integer' | 'derived';
 
 export interface BaseAttribute {
   id: string;
   name: string;
   type: AttributeType;
-  order: number;
+  sort: number;
 }
 
 export interface StringAttribute extends BaseAttribute {
@@ -26,12 +26,7 @@ export interface DerivedAttribute extends BaseAttribute {
   formula: string;
 }
 
-export interface HeadingAttribute extends BaseAttribute {
-  type: 'heading';
-  collapsed: boolean;
-}
-
-export type Attribute = StringAttribute | IntegerAttribute | DerivedAttribute | HeadingAttribute;
+export type Attribute = StringAttribute | IntegerAttribute | DerivedAttribute;
 
 // Resource types
 export type PipShape =
@@ -42,13 +37,13 @@ export type PipShape =
   // Polyhedral dice
   | 'd4' | 'd6' | 'd8' | 'd10' | 'd12' | 'd20';
 
-export type ResourceType = 'resource' | 'heading';
+export type ResourceType = 'resource';
 
 export interface BaseResource {
   id: string;
   name: string;
   type: ResourceType;
-  order: number;
+  sort: number;
 }
 
 export interface ResourceItem extends BaseResource {
@@ -59,15 +54,10 @@ export interface ResourceItem extends BaseResource {
   color: string; // hex color like "#6366f1"
 }
 
-export interface ResourceHeading extends BaseResource {
-  type: 'heading';
-  collapsed: boolean;
-}
-
-export type Resource = ResourceItem | ResourceHeading;
+export type Resource = ResourceItem;
 
 // Roll Template types
-export type RollTemplateType = 'roll' | 'heading';
+export type RollTemplateType = 'roll';
 
 export interface RollFormula {
   title: string;
@@ -78,7 +68,7 @@ export interface BaseRollTemplate {
   id: string;
   name: string;
   type: RollTemplateType;
-  order: number;
+  sort: number;
 }
 
 export interface RollTemplateRoll extends BaseRollTemplate {
@@ -88,21 +78,25 @@ export interface RollTemplateRoll extends BaseRollTemplate {
   superCondition?: string; // e.g., "{result} >= 20"
 }
 
-export interface RollTemplateHeading extends BaseRollTemplate {
-  type: 'heading';
-  collapsed: boolean;
-}
+export type RollTemplate = RollTemplateRoll;
 
-export type RollTemplate = RollTemplateRoll | RollTemplateHeading;
+export interface Heading {
+  id: string;
+  name: string;
+  sort: number;
+}
 
 // Character Sheet
 export interface CharacterSheet {
   id: string;
   name: string;
   initials?: string; // Optional custom 1-2 character initials for sidebar
+  schemaVersion: number;
+  version: number;
   attributes: Attribute[];
   rollTemplates: RollTemplate[];
   resources: Resource[];
+  headings: Heading[];
 }
 
 // History Entry
@@ -156,9 +150,11 @@ export interface ParsedFormula {
 export interface ExportedSheet {
   name: string;
   initials?: string;
-  attributes: Omit<Attribute, 'id' | 'order'>[];
-  rollTemplates: Omit<RollTemplate, 'id' | 'order'>[];
-  resources?: Omit<Resource, 'id' | 'order'>[];
+  schemaVersion?: number;
+  attributes: Omit<Attribute, 'id'>[];
+  rollTemplates: Omit<RollTemplate, 'id'>[];
+  resources?: Omit<Resource, 'id'>[];
+  headings?: Omit<Heading, 'id'>[];
 }
 
 export type ClientMessage =
@@ -166,21 +162,21 @@ export type ClientMessage =
   | { type: 'getSheet'; sheetId: string }
   | { type: 'createSheet'; name?: string }
   | { type: 'importSheet'; sheetData: ExportedSheet }
-  | { type: 'copySheet'; sheetId: string }
-  | { type: 'deleteSheet'; sheetId: string }
-  | { type: 'updateSheet'; sheetId: string; name: string; initials?: string }
-  | { type: 'createAttribute'; sheetId: string; attribute: Omit<Attribute, 'id' | 'order'> }
-  | { type: 'updateAttribute'; sheetId: string; attribute: Attribute }
-  | { type: 'deleteAttribute'; sheetId: string; attributeId: string }
-  | { type: 'reorderAttributes'; sheetId: string; attributeIds: string[] }
-  | { type: 'createRollTemplate'; sheetId: string; template: Omit<RollTemplate, 'id' | 'order'> }
-  | { type: 'updateRollTemplate'; sheetId: string; template: RollTemplate }
-  | { type: 'deleteRollTemplate'; sheetId: string; templateId: string }
-  | { type: 'reorderRollTemplates'; sheetId: string; templateIds: string[] }
-  | { type: 'createResource'; sheetId: string; resource: Omit<Resource, 'id' | 'order'> }
-  | { type: 'updateResource'; sheetId: string; resource: Resource }
-  | { type: 'deleteResource'; sheetId: string; resourceId: string }
-  | { type: 'reorderResources'; sheetId: string; resourceIds: string[] }
+  | { type: 'copySheet'; sheetId: string; sheetVersion: number }
+  | { type: 'deleteSheet'; sheetId: string; sheetVersion: number }
+  | { type: 'updateSheet'; sheetId: string; name: string; initials?: string; sheetVersion: number }
+  | { type: 'createAttribute'; sheetId: string; attribute: Omit<Attribute, 'id' | 'sort'>; sheetVersion: number }
+  | { type: 'updateAttribute'; sheetId: string; attribute: Attribute; sheetVersion: number }
+  | { type: 'deleteAttribute'; sheetId: string; attributeId: string; sheetVersion: number }
+  | { type: 'reorderAttributes'; sheetId: string; attributeIds: string[]; sheetVersion: number }
+  | { type: 'createRollTemplate'; sheetId: string; template: Omit<RollTemplate, 'id' | 'sort'>; sheetVersion: number }
+  | { type: 'updateRollTemplate'; sheetId: string; template: RollTemplate; sheetVersion: number }
+  | { type: 'deleteRollTemplate'; sheetId: string; templateId: string; sheetVersion: number }
+  | { type: 'reorderRollTemplates'; sheetId: string; templateIds: string[]; sheetVersion: number }
+  | { type: 'createResource'; sheetId: string; resource: Omit<Resource, 'id' | 'sort'>; sheetVersion: number }
+  | { type: 'updateResource'; sheetId: string; resource: Resource; sheetVersion: number }
+  | { type: 'deleteResource'; sheetId: string; resourceId: string; sheetVersion: number }
+  | { type: 'reorderResources'; sheetId: string; resourceIds: string[]; sheetVersion: number }
   | { type: 'getHistory' }
   | { type: 'clearHistory' }
   | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number };
@@ -191,6 +187,7 @@ export type ServerMessage =
   | { type: 'sheetCreated'; sheet: CharacterSheet }
   | { type: 'sheetDeleted'; sheetId: string }
   | { type: 'sheetUpdated'; sheet: CharacterSheet }
+  | { type: 'reject'; sheetId: string; sheetVersion: number; reason: string }
   | { type: 'history'; entries: HistoryEntry[] }
   | { type: 'historyEntry'; entry: HistoryEntry }
   | { type: 'historyCleared' }
