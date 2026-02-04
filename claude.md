@@ -47,6 +47,7 @@ Read the relevant docs based on what you're implementing:
 | Roll history, display format | `.claude/history.md` |
 | Super conditions (critical effects) | `.claude/super-conditions.md` |
 | Layout, responsive design, UI structure | `.claude/ui-layout.md` |
+| Unified display order refactor (phased) | `.claude/unified-display-order.md` |
 | Writing user documentation in `docs/` | `.claude/writing-human-docs.md` |
 | Writing Claude documentation in `.claude/` | `.claude/writing-claude-docs.md` |
 
