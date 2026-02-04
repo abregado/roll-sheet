@@ -181,6 +181,12 @@ export type ClientMessage =
   | { type: 'updateHeading'; sheetId: string; heading: Heading; sheetVersion: number }
   | { type: 'deleteHeading'; sheetId: string; headingId: string; sheetVersion: number }
   | { type: 'reorderHeadings'; sheetId: string; headingIds: string[]; sheetVersion: number }
+  | {
+      type: 'reorderUnified';
+      sheetId: string;
+      items: { kind: 'attribute' | 'rollTemplate' | 'resource' | 'heading'; id: string }[];
+      sheetVersion: number;
+    }
   | { type: 'getHistory' }
   | { type: 'clearHistory' }
   | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number };

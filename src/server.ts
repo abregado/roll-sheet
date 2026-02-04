@@ -229,6 +229,34 @@ function reorderKind(
   sortSheetLists(sheet);
 }
 
+function reorderUnified(
+  sheet: CharacterSheet,
+  orderedItems: { kind: UnifiedItem['kind']; id: string }[]
+): void {
+  const unified = buildUnifiedList(sheet);
+  const keyForOrder = (entry: { kind: UnifiedItem['kind']; id: string }) => `${entry.kind}:${entry.id}`;
+  const keyForUnified = (entry: UnifiedItem) => `${entry.kind}:${entry.item.id}`;
+  const entryByKey = new Map(unified.map((entry) => [keyForUnified(entry), entry]));
+  const orderedUnified: UnifiedItem[] = [];
+
+  orderedItems.forEach((entry) => {
+    const match = entryByKey.get(keyForOrder(entry));
+    if (match) {
+      orderedUnified.push(match);
+      entryByKey.delete(keyForOrder(entry));
+    }
+  });
+
+  unified.forEach((entry) => {
+    if (entryByKey.has(keyForUnified(entry))) {
+      orderedUnified.push(entry);
+    }
+  });
+
+  assignSortFromUnifiedList(orderedUnified);
+  sortSheetLists(sheet);
+}
+
 function hasLegacyHeading(items: unknown[]): boolean {
   return items.some((item) => typeof item === 'object' && item !== null && 'type' in item && (item as { type?: string }).type === 'heading');
 }
@@ -946,6 +974,22 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
           break;
         }
         reorderKind(sheet, 'heading', message.headingIds);
+        touchSheet(sheet);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'reorderUnified': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Reorder items')) {
+          break;
+        }
+        reorderUnified(sheet, message.items);
         touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });

@@ -1146,6 +1146,14 @@ input {
   border-top: 2px solid #6366f1;
 }
 
+.sheet-item {
+  transition: transform 0.12s ease, background-color 0.2s ease;
+}
+
+.sheet-item.drag-shift {
+  transform: translateY(var(--drag-shift, 0px));
+}
+
 .resource-item.indented {
   margin-left: 1.5rem;
 }

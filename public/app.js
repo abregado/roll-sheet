@@ -12,10 +12,7 @@
   let editingHeadingId = null;
   let editingTemplateId = null;
   let editingResourceId = null;
-  let draggedAttributeId = null;
-  let draggedHeadingId = null;
-  let draggedTemplateId = null;
-  let draggedResourceId = null;
+  let dragState = null;
   let collapsedHeadings = new Set(); // Track collapsed headings locally
   let activeItem = null;
   let pendingInsert = null;
@@ -778,6 +775,9 @@
     const el = clone.querySelector('.attribute-item');
 
     el.dataset.attributeId = attr.id;
+    el.dataset.kind = 'attribute';
+    el.dataset.itemId = attr.id;
+    el.classList.add('sheet-item');
 
     // Add indentation if under a heading
     if (headingId) {
@@ -796,7 +796,7 @@
 
     // Setup drag and drop (only in view mode)
     if (!isEditing) {
-      setupDragAndDrop(el, attr.id);
+      setupUnifiedDragAndDrop(el, 'attribute', attr.id);
     }
 
     return el;
@@ -810,6 +810,9 @@
 
     el.dataset.headingId = heading.id;
     el.dataset.attributeId = heading.id;
+    el.dataset.kind = 'heading';
+    el.dataset.itemId = heading.id;
+    el.classList.add('sheet-item');
 
     if (collapsedHeadings.has(heading.id)) {
       el.classList.add('collapsed');
@@ -822,7 +825,7 @@
     }
 
     if (!isEditing) {
-      setupHeadingDragAndDrop(el, heading.id);
+      setupUnifiedDragAndDrop(el, 'heading', heading.id);
     }
 
     return el;
@@ -1190,59 +1193,89 @@
   // Drag and Drop
   // ============================================================
 
-  function setupDragAndDrop(el, attributeId) {
+  function setupUnifiedDragAndDrop(el, kind, itemId) {
     const handle = el.querySelector('.drag-handle');
+    if (!handle || handle.classList.contains('disabled')) return;
 
     handle.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
       e.preventDefault();
-      startDrag(attributeId, e);
-    });
-
-    el.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (draggedAttributeId && draggedAttributeId !== attributeId) {
-        el.classList.add('drag-over');
-      }
-    });
-
-    el.addEventListener('dragleave', () => {
-      el.classList.remove('drag-over');
-    });
-
-    el.addEventListener('drop', (e) => {
-      e.preventDefault();
-      el.classList.remove('drag-over');
-      if (draggedAttributeId && draggedAttributeId !== attributeId) {
-        reorderAttributes(draggedAttributeId, attributeId);
-      }
+      startUnifiedDrag(el, kind, itemId, e);
     });
   }
 
-  function startDrag(attributeId, startEvent) {
-    draggedAttributeId = attributeId;
-    const draggedEl = elements.attributesList.querySelector(`[data-attribute-id="${attributeId}"]`);
-    if (!draggedEl) return;
+  function getSheetItems(includeCollapsed) {
+    const selector = includeCollapsed ? '.sheet-item' : '.sheet-item:not(.collapsed)';
+    return Array.from(elements.attributesList.querySelectorAll(selector));
+  }
+
+  function getListGap() {
+    const listStyle = window.getComputedStyle(elements.attributesList);
+    const gapValue = listStyle.rowGap || listStyle.gap || '0';
+    const gap = parseFloat(gapValue);
+    return Number.isFinite(gap) ? gap : 0;
+  }
+
+  function getTargetIndex(items, clientY) {
+    if (items.length === 0) return 0;
+    for (let i = 0; i < items.length; i += 1) {
+      const rect = items[i].getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (clientY < mid) {
+        return i;
+      }
+    }
+    return items.length;
+  }
+
+  function clearDragPreview(items) {
+    items.forEach((item) => {
+      item.classList.remove('drag-over', 'drag-shift');
+      item.style.removeProperty('--drag-shift');
+    });
+  }
+
+  function applyDragPreview(items, targetIndex, shiftY) {
+    clearDragPreview(items);
+    if (targetIndex < items.length) {
+      items[targetIndex].classList.add('drag-over');
+    }
+    for (let i = targetIndex; i < items.length; i += 1) {
+      items[i].classList.add('drag-shift');
+      items[i].style.setProperty('--drag-shift', `${shiftY}px`);
+    }
+  }
+
+  function buildUnifiedOrderFromDom(items) {
+    return items
+      .map((item) => ({ kind: item.dataset.kind, id: item.dataset.itemId }))
+      .filter((entry) => entry.kind && entry.id);
+  }
+
+  function startUnifiedDrag(draggedEl, kind, itemId, startEvent) {
+    const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
+    if (isReadOnly) return;
+
+    dragState = {
+      draggedEl,
+      kind,
+      itemId,
+      targetIndex: null,
+      targetEl: null,
+      shiftY: draggedEl.getBoundingClientRect().height + getListGap(),
+    };
 
     draggedEl.classList.add('dragging');
 
-    const items = Array.from(elements.attributesList.querySelectorAll('.attribute-item:not(.heading-item):not(.collapsed)'));
-    const draggedIndex = items.indexOf(draggedEl);
-    const itemHeight = draggedEl.offsetHeight + 4; // Including gap
-
-    let currentIndex = draggedIndex;
-    const startY = startEvent.clientY;
-
     const onMouseMove = (e) => {
-      const deltaY = e.clientY - startY;
-      const indexDelta = Math.round(deltaY / itemHeight);
-      const newIndex = Math.max(0, Math.min(items.length - 1, draggedIndex + indexDelta));
+      if (!dragState) return;
+      const visibleItems = getSheetItems(false).filter((item) => item !== dragState.draggedEl);
+      const targetIndex = getTargetIndex(visibleItems, e.clientY);
 
-      if (newIndex !== currentIndex) {
-        items.forEach(item => item.classList.remove('drag-over'));
-        if (newIndex !== draggedIndex) {
-          items[newIndex]?.classList.add('drag-over');
-        }
-        currentIndex = newIndex;
+      if (targetIndex !== dragState.targetIndex) {
+        dragState.targetIndex = targetIndex;
+        dragState.targetEl = targetIndex < visibleItems.length ? visibleItems[targetIndex] : null;
+        applyDragPreview(visibleItems, targetIndex, dragState.shiftY);
       }
     };
 
@@ -1250,130 +1283,35 @@
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
 
-      draggedEl.classList.remove('dragging');
-      items.forEach(item => item.classList.remove('drag-over'));
+      if (!dragState) return;
 
-      if (currentIndex !== draggedIndex) {
-        const orderedIds = items.map(item => item.dataset.attributeId);
-        const [removed] = orderedIds.splice(draggedIndex, 1);
-        orderedIds.splice(currentIndex, 0, removed);
+      const allItems = getSheetItems(true);
+      const originalOrder = buildUnifiedOrderFromDom(allItems);
+      const reordered = allItems.filter((item) => item !== dragState.draggedEl);
+      const insertIndex = dragState.targetEl ? reordered.indexOf(dragState.targetEl) : reordered.length;
 
-        sendSheetAction({ type: 'reorderAttributes', sheetId: currentSheetId, attributeIds: orderedIds });
+      if (dragState.targetIndex !== null) {
+        reordered.splice(insertIndex, 0, dragState.draggedEl);
       }
 
-      draggedAttributeId = null;
+      const updatedOrder = buildUnifiedOrderFromDom(reordered);
+
+      draggedEl.classList.remove('dragging');
+      clearDragPreview(getSheetItems(true));
+
+      if (
+        dragState.targetIndex !== null &&
+        updatedOrder.length === originalOrder.length &&
+        updatedOrder.some((entry, idx) => entry.kind !== originalOrder[idx]?.kind || entry.id !== originalOrder[idx]?.id)
+      ) {
+        sendSheetAction({ type: 'reorderUnified', sheetId: currentSheetId, items: updatedOrder });
+      }
+
+      dragState = null;
     };
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }
-
-  function reorderAttributes(draggedId, targetId) {
-    const items = Array.from(elements.attributesList.querySelectorAll('.attribute-item:not(.heading-item)'));
-    const orderedIds = items.map(item => item.dataset.attributeId);
-
-    const draggedIndex = orderedIds.indexOf(draggedId);
-    const targetIndex = orderedIds.indexOf(targetId);
-
-    if (draggedIndex === -1 || targetIndex === -1) return;
-
-    orderedIds.splice(draggedIndex, 1);
-    orderedIds.splice(targetIndex, 0, draggedId);
-
-    sendSheetAction({ type: 'reorderAttributes', sheetId: currentSheetId, attributeIds: orderedIds });
-  }
-
-  function setupHeadingDragAndDrop(el, headingId) {
-    const handle = el.querySelector('.drag-handle');
-
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      startHeadingDrag(headingId, e);
-    });
-
-    el.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (draggedHeadingId && draggedHeadingId !== headingId) {
-        el.classList.add('drag-over');
-      }
-    });
-
-    el.addEventListener('dragleave', () => {
-      el.classList.remove('drag-over');
-    });
-
-    el.addEventListener('drop', (e) => {
-      e.preventDefault();
-      el.classList.remove('drag-over');
-      if (draggedHeadingId && draggedHeadingId !== headingId) {
-        reorderHeadings(draggedHeadingId, headingId);
-      }
-    });
-  }
-
-  function startHeadingDrag(headingId, startEvent) {
-    draggedHeadingId = headingId;
-    const draggedEl = elements.attributesList.querySelector(`[data-heading-id="${headingId}"]`);
-    if (!draggedEl) return;
-
-    draggedEl.classList.add('dragging');
-
-    const items = Array.from(elements.attributesList.querySelectorAll('.heading-item:not(.collapsed)'));
-    const draggedIndex = items.indexOf(draggedEl);
-    const itemHeight = draggedEl.offsetHeight + 4;
-
-    let currentIndex = draggedIndex;
-    const startY = startEvent.clientY;
-
-    const onMouseMove = (e) => {
-      const deltaY = e.clientY - startY;
-      const indexDelta = Math.round(deltaY / itemHeight);
-      const newIndex = Math.max(0, Math.min(items.length - 1, draggedIndex + indexDelta));
-
-      if (newIndex !== currentIndex) {
-        items.forEach(item => item.classList.remove('drag-over'));
-        if (newIndex !== draggedIndex) {
-          items[newIndex]?.classList.add('drag-over');
-        }
-        currentIndex = newIndex;
-      }
-    };
-
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-
-      draggedEl.classList.remove('dragging');
-      items.forEach(item => item.classList.remove('drag-over'));
-
-      if (currentIndex !== draggedIndex) {
-        const orderedIds = items.map(item => item.dataset.headingId);
-        const [removed] = orderedIds.splice(draggedIndex, 1);
-        orderedIds.splice(currentIndex, 0, removed);
-
-        sendSheetAction({ type: 'reorderHeadings', sheetId: currentSheetId, headingIds: orderedIds });
-      }
-
-      draggedHeadingId = null;
-    };
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }
-
-  function reorderHeadings(draggedId, targetId) {
-    const items = Array.from(elements.attributesList.querySelectorAll('.heading-item'));
-    const orderedIds = items.map(item => item.dataset.headingId);
-
-    const draggedIndex = orderedIds.indexOf(draggedId);
-    const targetIndex = orderedIds.indexOf(targetId);
-
-    if (draggedIndex === -1 || targetIndex === -1) return;
-
-    orderedIds.splice(draggedIndex, 1);
-    orderedIds.splice(targetIndex, 0, draggedId);
-
-    sendSheetAction({ type: 'reorderHeadings', sheetId: currentSheetId, headingIds: orderedIds });
   }
 
   // ============================================================
@@ -1507,6 +1445,9 @@
     const el = clone.querySelector('.template-item');
 
     el.dataset.templateId = template.id;
+    el.dataset.kind = 'rollTemplate';
+    el.dataset.itemId = template.id;
+    el.classList.add('sheet-item');
 
     // Add indentation if under a heading
     if (headingId) {
@@ -1528,7 +1469,7 @@
 
     // Setup drag and drop (only in view mode)
     if (!isEditing) {
-      setupTemplateDragAndDrop(el, template.id);
+      setupUnifiedDragAndDrop(el, 'rollTemplate', template.id);
     }
 
     return el;
@@ -1550,11 +1491,6 @@
       setupTemplateHeadingEditMode(el, template);
     } else {
       setupTemplateHeadingViewMode(el, template);
-    }
-
-    // Setup drag and drop (only in view mode)
-    if (!isEditing) {
-      setupTemplateDragAndDrop(el, template.id);
     }
 
     return el;
@@ -1982,103 +1918,6 @@
   }
 
   // ============================================================
-  // Roll Template Drag and Drop
-  // ============================================================
-
-  function setupTemplateDragAndDrop(el, templateId) {
-    const handle = el.querySelector('.drag-handle');
-
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      startTemplateDrag(templateId, e);
-    });
-
-    el.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (draggedTemplateId && draggedTemplateId !== templateId) {
-        el.classList.add('drag-over');
-      }
-    });
-
-    el.addEventListener('dragleave', () => {
-      el.classList.remove('drag-over');
-    });
-
-    el.addEventListener('drop', (e) => {
-      e.preventDefault();
-      el.classList.remove('drag-over');
-      if (draggedTemplateId && draggedTemplateId !== templateId) {
-        reorderTemplates(draggedTemplateId, templateId);
-      }
-    });
-  }
-
-  function startTemplateDrag(templateId, startEvent) {
-    draggedTemplateId = templateId;
-    const draggedEl = elements.attributesList.querySelector(`[data-template-id="${templateId}"]`);
-    if (!draggedEl) return;
-
-    draggedEl.classList.add('dragging');
-
-    const items = Array.from(elements.attributesList.querySelectorAll('.template-item:not(.collapsed)'));
-    const draggedIndex = items.indexOf(draggedEl);
-    const itemHeight = draggedEl.offsetHeight + 8; // Including gap
-
-    let currentIndex = draggedIndex;
-    const startY = startEvent.clientY;
-
-    const onMouseMove = (e) => {
-      const deltaY = e.clientY - startY;
-      const indexDelta = Math.round(deltaY / itemHeight);
-      const newIndex = Math.max(0, Math.min(items.length - 1, draggedIndex + indexDelta));
-
-      if (newIndex !== currentIndex) {
-        items.forEach(item => item.classList.remove('drag-over'));
-        if (newIndex !== draggedIndex) {
-          items[newIndex]?.classList.add('drag-over');
-        }
-        currentIndex = newIndex;
-      }
-    };
-
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-
-      draggedEl.classList.remove('dragging');
-      items.forEach(item => item.classList.remove('drag-over'));
-
-      if (currentIndex !== draggedIndex) {
-        const orderedIds = items.map(item => item.dataset.templateId);
-        const [removed] = orderedIds.splice(draggedIndex, 1);
-        orderedIds.splice(currentIndex, 0, removed);
-
-        sendSheetAction({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
-      }
-
-      draggedTemplateId = null;
-    };
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }
-
-  function reorderTemplates(draggedId, targetId) {
-    const items = Array.from(elements.attributesList.querySelectorAll('.template-item'));
-    const orderedIds = items.map(item => item.dataset.templateId);
-
-    const draggedIndex = orderedIds.indexOf(draggedId);
-    const targetIndex = orderedIds.indexOf(targetId);
-
-    if (draggedIndex === -1 || targetIndex === -1) return;
-
-    orderedIds.splice(draggedIndex, 1);
-    orderedIds.splice(targetIndex, 0, draggedId);
-
-    sendSheetAction({ type: 'reorderRollTemplates', sheetId: currentSheetId, templateIds: orderedIds });
-  }
-
-  // ============================================================
   // Resources Rendering
   // ============================================================
 
@@ -2157,6 +1996,9 @@
     const el = clone.querySelector('.resource-item');
 
     el.dataset.resourceId = resource.id;
+    el.dataset.kind = 'resource';
+    el.dataset.itemId = resource.id;
+    el.classList.add('sheet-item');
 
     // Add indentation if under a heading
     if (headingId) {
@@ -2175,7 +2017,7 @@
 
     // Setup drag and drop (only in view mode)
     if (!isEditing) {
-      setupResourceDragAndDrop(el, resource.id);
+      setupUnifiedDragAndDrop(el, 'resource', resource.id);
     }
 
     return el;
@@ -2197,11 +2039,6 @@
       setupResourceHeadingEditMode(el, resource);
     } else {
       setupResourceHeadingViewMode(el, resource);
-    }
-
-    // Setup drag and drop (only in view mode)
-    if (!isEditing) {
-      setupResourceDragAndDrop(el, resource.id);
     }
 
     return el;
@@ -2481,103 +2318,6 @@
     // Send update to server
     const updated = { ...resource, current: newCurrent };
     sendSheetAction({ type: 'updateResource', sheetId: currentSheetId, resource: updated });
-  }
-
-  // ============================================================
-  // Resource Drag and Drop
-  // ============================================================
-
-  function setupResourceDragAndDrop(el, resourceId) {
-    const handle = el.querySelector('.drag-handle');
-
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      startResourceDrag(resourceId, e);
-    });
-
-    el.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (draggedResourceId && draggedResourceId !== resourceId) {
-        el.classList.add('drag-over');
-      }
-    });
-
-    el.addEventListener('dragleave', () => {
-      el.classList.remove('drag-over');
-    });
-
-    el.addEventListener('drop', (e) => {
-      e.preventDefault();
-      el.classList.remove('drag-over');
-      if (draggedResourceId && draggedResourceId !== resourceId) {
-        reorderResources(draggedResourceId, resourceId);
-      }
-    });
-  }
-
-  function startResourceDrag(resourceId, startEvent) {
-    draggedResourceId = resourceId;
-    const draggedEl = elements.attributesList.querySelector(`[data-resource-id="${resourceId}"]`);
-    if (!draggedEl) return;
-
-    draggedEl.classList.add('dragging');
-
-    const items = Array.from(elements.attributesList.querySelectorAll('.resource-item:not(.collapsed)'));
-    const draggedIndex = items.indexOf(draggedEl);
-    const itemHeight = draggedEl.offsetHeight + 4; // Including gap
-
-    let currentIndex = draggedIndex;
-    const startY = startEvent.clientY;
-
-    const onMouseMove = (e) => {
-      const deltaY = e.clientY - startY;
-      const indexDelta = Math.round(deltaY / itemHeight);
-      const newIndex = Math.max(0, Math.min(items.length - 1, draggedIndex + indexDelta));
-
-      if (newIndex !== currentIndex) {
-        items.forEach(item => item.classList.remove('drag-over'));
-        if (newIndex !== draggedIndex) {
-          items[newIndex]?.classList.add('drag-over');
-        }
-        currentIndex = newIndex;
-      }
-    };
-
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-
-      draggedEl.classList.remove('dragging');
-      items.forEach(item => item.classList.remove('drag-over'));
-
-      if (currentIndex !== draggedIndex) {
-        const orderedIds = items.map(item => item.dataset.resourceId);
-        const [removed] = orderedIds.splice(draggedIndex, 1);
-        orderedIds.splice(currentIndex, 0, removed);
-
-        sendSheetAction({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
-      }
-
-      draggedResourceId = null;
-    };
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }
-
-  function reorderResources(draggedId, targetId) {
-    const items = Array.from(elements.attributesList.querySelectorAll('.resource-item'));
-    const orderedIds = items.map(item => item.dataset.resourceId);
-
-    const draggedIndex = orderedIds.indexOf(draggedId);
-    const targetIndex = orderedIds.indexOf(targetId);
-
-    if (draggedIndex === -1 || targetIndex === -1) return;
-
-    orderedIds.splice(draggedIndex, 1);
-    orderedIds.splice(targetIndex, 0, draggedId);
-
-    sendSheetAction({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
   }
 
   // ============================================================
