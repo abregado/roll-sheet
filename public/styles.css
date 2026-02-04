@@ -419,6 +419,14 @@ input {
   opacity: 0.3;
 }
 
+.drag-handle-section {
+  color: #4a4a6a;
+}
+
+.drag-handle-section:hover {
+  color: #9ca3af;
+}
+
 /* Attribute Name */
 .attribute-name {
   font-weight: 500;
@@ -488,7 +496,7 @@ input {
   margin-top: 0.5rem;
   border-bottom: 1px solid #3a3a5a;
   border-radius: 0;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto auto auto 1fr auto;
 }
 
 .heading-item:first-child {
@@ -802,7 +810,7 @@ input {
   margin-top: 0.5rem;
   border-bottom: 1px solid #3a3a5a;
   border-radius: 0;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto auto auto 1fr auto;
 }
 
 .template-heading-item:first-child {
@@ -1164,6 +1172,28 @@ input {
   top: 0;
   pointer-events: none;
   z-index: 1000;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+}
+
+.drag-ghost-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attributes-list.section-dragging .sheet-item.indented {
+  display: none;
+}
+
+.attributes-list.section-dragging .heading-item .collapse-btn .collapse-icon,
+.attributes-list.section-dragging .template-heading-item .collapse-btn .collapse-icon,
+.attributes-list.section-dragging .resource-heading-item .collapse-btn .collapse-icon {
+  transform: rotate(-90deg);
 }
 
 .resource-item.indented {
@@ -1193,7 +1223,7 @@ input {
   margin-top: 0.5rem;
   border-bottom: 1px solid #3a3a5a;
   border-radius: 0;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto auto auto 1fr auto;
 }
 
 .resource-heading-item:first-child {

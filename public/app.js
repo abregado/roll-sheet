@@ -1203,18 +1203,31 @@
 
   function setupUnifiedDragAndDrop(el, kind, itemId) {
     const handle = el.querySelector('.drag-handle');
-    if (!handle || handle.classList.contains('disabled')) return;
+    if (handle && !handle.classList.contains('disabled')) {
+      handle.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        startUnifiedDrag(el, kind, itemId, e);
+      });
+    }
 
-    handle.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      startUnifiedDrag(el, kind, itemId, e);
-    });
+    const sectionHandle = el.querySelector('.drag-handle-section');
+    if (sectionHandle && !sectionHandle.classList.contains('disabled')) {
+      sectionHandle.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        startUnifiedDrag(el, kind, itemId, e, { mode: 'section' });
+      });
+    }
   }
 
-  function getSheetItems(includeCollapsed) {
+  function getSheetItems(includeCollapsed, options = {}) {
     const selector = includeCollapsed ? '.sheet-item' : '.sheet-item:not(.collapsed)';
-    return Array.from(elements.attributesList.querySelectorAll(selector));
+    let items = Array.from(elements.attributesList.querySelectorAll(selector));
+    if (options.sectionOnly) {
+      items = items.filter((item) => !item.classList.contains('indented'));
+    }
+    return items;
   }
 
   function getListGap() {
@@ -1260,10 +1273,32 @@
       .filter((entry) => entry.kind && entry.id);
   }
 
-  function startUnifiedDrag(draggedEl, kind, itemId, startEvent) {
+  function getDragLabel(kind, itemId, sectionCount = null) {
+    const item = getKindItems(kind).find(entry => entry.id === itemId);
+    const baseName = item && item.name ? item.name : 'Untitled';
+    if (sectionCount === null) {
+      return baseName;
+    }
+    return `${baseName} + ${sectionCount} items`;
+  }
+
+  function getSectionBlockItems(allItems, draggedEl) {
+    const startIndex = allItems.indexOf(draggedEl);
+    if (startIndex === -1) return [];
+    const blockItems = [draggedEl];
+    for (let i = startIndex + 1; i < allItems.length; i += 1) {
+      const item = allItems[i];
+      if (item.dataset.kind === 'heading') break;
+      blockItems.push(item);
+    }
+    return blockItems;
+  }
+
+  function startUnifiedDrag(draggedEl, kind, itemId, startEvent, options = {}) {
     const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
     if (isReadOnly) return;
 
+    const dragMode = options.mode === 'section' ? 'section' : 'single';
     const rect = draggedEl.getBoundingClientRect();
     const ghostEl = document.createElement('div');
     const itemStyle = window.getComputedStyle(draggedEl);
@@ -1272,18 +1307,36 @@
     ghostEl.style.height = `${rect.height}px`;
     ghostEl.style.backgroundColor = itemStyle.backgroundColor;
     ghostEl.style.borderRadius = itemStyle.borderRadius;
+    ghostEl.style.color = itemStyle.color;
+
+    const allItems = getSheetItems(true);
+    const blockItems = dragMode === 'section' && kind === 'heading'
+      ? getSectionBlockItems(allItems, draggedEl)
+      : null;
+    const sectionCount = blockItems ? Math.max(0, blockItems.length - 1) : null;
+    const ghostLabel = document.createElement('div');
+    ghostLabel.className = 'drag-ghost-label';
+    ghostLabel.textContent = getDragLabel(kind, itemId, sectionCount);
+    ghostEl.appendChild(ghostLabel);
     document.body.appendChild(ghostEl);
+
+    const gap = getListGap();
+    const shiftY = blockItems
+      ? blockItems.reduce((sum, item) => sum + item.getBoundingClientRect().height, 0) + (gap * blockItems.length)
+      : rect.height + gap;
 
     dragState = {
       draggedEl,
       kind,
       itemId,
+      dragMode,
       targetIndex: null,
       targetEl: null,
-      shiftY: rect.height + getListGap(),
+      shiftY,
       ghostEl,
       offsetX: startEvent.clientX - rect.left,
       offsetY: startEvent.clientY - rect.top,
+      blockItems,
     };
 
     draggedEl.classList.add('dragging');
@@ -1291,11 +1344,17 @@
     ghostEl.style.left = `${startEvent.clientX - dragState.offsetX}px`;
     ghostEl.style.top = `${startEvent.clientY - dragState.offsetY}px`;
 
+    if (dragMode === 'section' && kind === 'heading') {
+      elements.attributesList.classList.add('section-dragging');
+    }
+
     const onMouseMove = (e) => {
       if (!dragState) return;
       dragState.ghostEl.style.left = `${e.clientX - dragState.offsetX}px`;
       dragState.ghostEl.style.top = `${e.clientY - dragState.offsetY}px`;
-      const visibleItems = getSheetItems(false).filter((item) => item !== dragState.draggedEl);
+      const visibleItems = getSheetItems(false, { sectionOnly: dragState.dragMode === 'section' })
+        .filter((item) => item !== dragState.draggedEl)
+        .filter((item) => !dragState.blockItems || !dragState.blockItems.includes(item));
       const targetIndex = getTargetIndex(visibleItems, e.clientY);
 
       if (targetIndex !== dragState.targetIndex) {
@@ -1311,13 +1370,16 @@
 
       if (!dragState) return;
 
-      const allItems = getSheetItems(true);
-      const originalOrder = buildUnifiedOrderFromDom(allItems);
-      const reordered = allItems.filter((item) => item !== dragState.draggedEl);
+      const dropItems = getSheetItems(true);
+      const originalOrder = buildUnifiedOrderFromDom(dropItems);
+      const movedItems = dragState.blockItems && dragState.blockItems.length
+        ? dragState.blockItems
+        : [dragState.draggedEl];
+      const reordered = dropItems.filter((item) => !movedItems.includes(item));
       const insertIndex = dragState.targetEl ? reordered.indexOf(dragState.targetEl) : reordered.length;
 
       if (dragState.targetIndex !== null) {
-        reordered.splice(insertIndex, 0, dragState.draggedEl);
+        reordered.splice(insertIndex, 0, ...movedItems);
       }
 
       const updatedOrder = buildUnifiedOrderFromDom(reordered);
@@ -1326,6 +1388,7 @@
       draggedEl.classList.remove('drag-hidden');
       dragState.ghostEl.remove();
       clearDragPreview(getSheetItems(true));
+      elements.attributesList.classList.remove('section-dragging');
 
       if (
         dragState.targetIndex !== null &&
