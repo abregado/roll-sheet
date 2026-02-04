@@ -28,7 +28,7 @@ This guide covers everything you need to know to use Roll Sheet effectively.
 When you first open Roll Sheet, you'll see a three-column layout:
 
 1. **Sheet Sidebar** (left) - Icons for each character sheet
-2. **Character Sheet** (center) - Attributes and roll templates
+2. **Character Sheet** (center) - A unified list of sheet items (attributes, roll templates, resources, headings)
 3. **History** (right) - Roll results
 
 Click the **+** button in the sidebar to create your first character sheet.
@@ -87,7 +87,15 @@ Click the lock icon to toggle between modes at any time.
 
 ## Attributes
 
-Attributes store your character's stats and information. There are four types:
+Attributes store your character's stats and information. They appear inside the unified Sheet Items list alongside roll templates, resources, and headings.
+
+### Unified Sheet Items List
+
+- All items live in one list sorted by their display order.
+- Use the add buttons at the bottom to create headings, attributes, roll templates, or resources.
+- **Reorder**: Drag the handle on the left of any item to move it anywhere in the list. A space opens where the item will land.
+
+Attributes come in four types:
 
 ### String Attributes
 
@@ -120,7 +128,7 @@ Section dividers to organize your attributes. Click the chevron to collapse/expa
 - **Save**: Press Enter or click the checkmark
 - **Cancel**: Press Escape or click the X
 - **Delete**: Click the trash icon in edit mode
-- **Reorder**: Drag using the handle on the left
+- **Reorder**: Drag using the handle on the left (works across all item types)
 
 Note: In read-only mode, attribute codes are hidden for a cleaner display.
 
@@ -140,7 +148,7 @@ Roll templates let you save and reuse dice formulas.
 
 ### Creating a Template
 
-1. Click **+ Roll** at the bottom of the Roll Templates section
+1. Click **+ Roll Template** at the bottom of the Sheet Items list
 2. Enter a name (e.g., "Attack Roll")
 3. Add formula variants with titles (e.g., "Normal", "With Advantage")
 4. Set the display format

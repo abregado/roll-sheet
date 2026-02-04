@@ -13,6 +13,8 @@ A web app for tracking TTRPG character attributes and rolling dice online with r
 - **Client**: Vanilla JavaScript with plain CSS
 - **Persistence**: Server-side JSON storage for sheets and history
 - **Communication**: WebSockets for real-time sync
+- **Unified list**: Attributes, roll templates, resources, and headings render in one list sorted by `sort`
+- **Ordering**: Reorder actions send the full unified order and require per-sheet version sync
 
 ## File Structure
 
@@ -41,13 +43,12 @@ Read the relevant docs based on what you're implementing:
 | Task | Read |
 |------|------|
 | Sheet create/copy/delete/rename, read-only mode | `.claude/sheets.md` |
-| Attributes (string, integer, derived, headings) | `.claude/attributes.md` |
+| Unified list, headings, and item ordering | `.claude/attributes.md` |
 | Roll templates, formula variants | `.claude/roll-templates.md` |
 | Dice notation, parsing, keep/drop modifiers | `.claude/dice.md` |
 | Roll history, display format | `.claude/history.md` |
 | Super conditions (critical effects) | `.claude/super-conditions.md` |
 | Layout, responsive design, UI structure | `.claude/ui-layout.md` |
-| Unified display order refactor (phased) | `.claude/unified-display-order.md` |
 | Writing user documentation in `docs/` | `.claude/writing-human-docs.md` |
 | Writing Claude documentation in `.claude/` | `.claude/writing-claude-docs.md` |
 
