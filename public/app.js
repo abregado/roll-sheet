@@ -637,8 +637,12 @@
   function renderSheet() {
     if (!currentSheet) {
       elements.attributesList.innerHTML = '<div class="empty-state">No sheet selected</div>';
-      elements.templatesList.innerHTML = '';
-      elements.resourcesList.innerHTML = '';
+      if (elements.templatesList) {
+        elements.templatesList.innerHTML = '';
+      }
+      if (elements.resourcesList) {
+        elements.resourcesList.innerHTML = '';
+      }
       elements.sheetName.textContent = 'Character Sheet';
       return;
     }
@@ -647,8 +651,12 @@
     elements.sheetName.textContent = currentSheet.name;
 
     renderUnifiedList();
-    elements.templatesList.innerHTML = '';
-    elements.resourcesList.innerHTML = '';
+    if (elements.templatesList) {
+      elements.templatesList.innerHTML = '';
+    }
+    if (elements.resourcesList) {
+      elements.resourcesList.innerHTML = '';
+    }
   }
 
   // ============================================================
@@ -1256,19 +1264,37 @@
     const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
     if (isReadOnly) return;
 
+    const rect = draggedEl.getBoundingClientRect();
+    const ghostEl = document.createElement('div');
+    const itemStyle = window.getComputedStyle(draggedEl);
+    ghostEl.className = 'drag-ghost';
+    ghostEl.style.width = `${rect.width}px`;
+    ghostEl.style.height = `${rect.height}px`;
+    ghostEl.style.backgroundColor = itemStyle.backgroundColor;
+    ghostEl.style.borderRadius = itemStyle.borderRadius;
+    document.body.appendChild(ghostEl);
+
     dragState = {
       draggedEl,
       kind,
       itemId,
       targetIndex: null,
       targetEl: null,
-      shiftY: draggedEl.getBoundingClientRect().height + getListGap(),
+      shiftY: rect.height + getListGap(),
+      ghostEl,
+      offsetX: startEvent.clientX - rect.left,
+      offsetY: startEvent.clientY - rect.top,
     };
 
     draggedEl.classList.add('dragging');
+    draggedEl.classList.add('drag-hidden');
+    ghostEl.style.left = `${startEvent.clientX - dragState.offsetX}px`;
+    ghostEl.style.top = `${startEvent.clientY - dragState.offsetY}px`;
 
     const onMouseMove = (e) => {
       if (!dragState) return;
+      dragState.ghostEl.style.left = `${e.clientX - dragState.offsetX}px`;
+      dragState.ghostEl.style.top = `${e.clientY - dragState.offsetY}px`;
       const visibleItems = getSheetItems(false).filter((item) => item !== dragState.draggedEl);
       const targetIndex = getTargetIndex(visibleItems, e.clientY);
 
@@ -1297,6 +1323,8 @@
       const updatedOrder = buildUnifiedOrderFromDom(reordered);
 
       draggedEl.classList.remove('dragging');
+      draggedEl.classList.remove('drag-hidden');
+      dragState.ghostEl.remove();
       clearDragPreview(getSheetItems(true));
 
       if (
@@ -2786,10 +2814,18 @@
     elements.addStringAttrBtn.addEventListener('click', () => addAttribute('string'));
     elements.addIntegerAttrBtn.addEventListener('click', () => addAttribute('integer'));
     elements.addDerivedAttrBtn.addEventListener('click', () => addAttribute('derived'));
-    elements.addTemplateBtn.addEventListener('click', addRollTemplate);
-    elements.addTemplateHeadingBtn.addEventListener('click', addHeading);
-    elements.addResourceBtn.addEventListener('click', addResource);
-    elements.addResourceHeadingBtn.addEventListener('click', addHeading);
+    if (elements.addTemplateBtn) {
+      elements.addTemplateBtn.addEventListener('click', addRollTemplate);
+    }
+    if (elements.addTemplateHeadingBtn) {
+      elements.addTemplateHeadingBtn.addEventListener('click', addHeading);
+    }
+    if (elements.addResourceBtn) {
+      elements.addResourceBtn.addEventListener('click', addResource);
+    }
+    if (elements.addResourceHeadingBtn) {
+      elements.addResourceHeadingBtn.addEventListener('click', addHeading);
+    }
 
     elements.deleteModal.addEventListener('click', (e) => {
       if (e.target === elements.deleteModal) {

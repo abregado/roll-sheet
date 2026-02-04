@@ -1154,6 +1154,18 @@ input {
   transform: translateY(var(--drag-shift, 0px));
 }
 
+.sheet-item.drag-hidden {
+  display: none;
+}
+
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 1000;
+}
+
 .resource-item.indented {
   margin-left: 1.5rem;
 }
