@@ -349,6 +349,10 @@ input {
   margin-bottom: 1rem;
 }
 
+.attributes-list.dragging-list {
+  padding-bottom: var(--drag-pad, 0px);
+}
+
 /* Attribute Item - Compact Single Line Layout */
 /* Layout: drag-handle | name | code | value | warning | edit-btn */
 .attribute-item {

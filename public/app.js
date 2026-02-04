@@ -1341,6 +1341,8 @@
 
     draggedEl.classList.add('dragging');
     draggedEl.classList.add('drag-hidden');
+    elements.attributesList.classList.add('dragging-list');
+    elements.attributesList.style.setProperty('--drag-pad', `${dragState.shiftY}px`);
     ghostEl.style.left = `${startEvent.clientX - dragState.offsetX}px`;
     ghostEl.style.top = `${startEvent.clientY - dragState.offsetY}px`;
 
@@ -1389,6 +1391,8 @@
       dragState.ghostEl.remove();
       clearDragPreview(getSheetItems(true));
       elements.attributesList.classList.remove('section-dragging');
+      elements.attributesList.classList.remove('dragging-list');
+      elements.attributesList.style.removeProperty('--drag-pad');
 
       if (
         dragState.targetIndex !== null &&
