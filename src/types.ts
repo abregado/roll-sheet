@@ -209,6 +209,7 @@ export type ServerMessage =
   | { type: 'sheetList'; sheets: { id: string; name: string; initials?: string }[] }
   | { type: 'sheet'; sheet: CharacterSheet }
   | { type: 'sheetCreated'; sheet: CharacterSheet }
+  | { type: 'sheetAdded'; sheet: CharacterSheet }
   | { type: 'sheetDeleted'; sheetId: string }
   | { type: 'sheetUpdated'; sheet: CharacterSheet }
   | { type: 'reject'; sheetId: string; sheetVersion: number; reason: string }

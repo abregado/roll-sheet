@@ -547,7 +547,10 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
       const newSheet = createDefaultSheet(message.name);
       sheets.push(newSheet);
       saveSheets();
-      broadcast({ type: 'sheetCreated', sheet: newSheet });
+      // Send sheetCreated to requesting client (they switch to it)
+      send(ws, { type: 'sheetCreated', sheet: newSheet });
+      // Send sheetAdded to other clients (they just update their list)
+      broadcast({ type: 'sheetAdded', sheet: newSheet }, ws);
       break;
     }
 
@@ -565,7 +568,10 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
 
       sheets.push(importedSheet);
       saveSheets();
-      broadcast({ type: 'sheetCreated', sheet: importedSheet });
+      // Send sheetCreated to requesting client (they switch to it)
+      send(ws, { type: 'sheetCreated', sheet: importedSheet });
+      // Send sheetAdded to other clients (they just update their list)
+      broadcast({ type: 'sheetAdded', sheet: importedSheet }, ws);
       break;
     }
 
@@ -605,7 +611,10 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
         }));
         sheets.push(copiedSheet);
         saveSheets();
-        broadcast({ type: 'sheetCreated', sheet: copiedSheet });
+        // Send sheetCreated to requesting client (they switch to it)
+        send(ws, { type: 'sheetCreated', sheet: copiedSheet });
+        // Send sheetAdded to other clients (they just update their list)
+        broadcast({ type: 'sheetAdded', sheet: copiedSheet }, ws);
       } else {
         send(ws, { type: 'error', message: 'Sheet not found' });
       }

@@ -18,7 +18,6 @@
 - when a client rolls something, show the result in the middle of the screen.
 - more juice when a new non-super roll comes in
 - adhoc rolls
-- BUG: when one client makes a new sheet, all other clients get swapped to it
 - (i) icon that shows description text that the user can enter on an attribute/roll tempalte/or resource
 - short string description resource
 

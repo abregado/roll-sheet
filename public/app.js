@@ -145,7 +145,7 @@
         break;
 
       case 'sheetCreated':
-        sheets.push({ id: message.sheet.id, name: message.sheet.name });
+        sheets.push({ id: message.sheet.id, name: message.sheet.name, initials: message.sheet.initials });
         renderSheetIcons();
         // New sheets should be unlocked for editing
         readOnlySheets.delete(message.sheet.id);
@@ -153,6 +153,12 @@
         // Ensure it stays unlocked after selectSheet
         readOnlySheets.delete(message.sheet.id);
         applyReadOnlyMode();
+        break;
+
+      case 'sheetAdded':
+        // Another client created a sheet - just update the list, don't switch
+        sheets.push({ id: message.sheet.id, name: message.sheet.name, initials: message.sheet.initials });
+        renderSheetIcons();
         break;
 
       case 'sheetDeleted':
