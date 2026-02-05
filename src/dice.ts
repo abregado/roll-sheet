@@ -277,6 +277,11 @@ export function buildAttributeMap(
  * Evaluate a derived attribute formula (supports +, -, *, /, ceil, floor)
  */
 function evaluateDerivedFormula(formula: string, values: Map<string, number>): number {
+  // Empty formula evaluates to 0
+  if (!formula || !formula.trim()) {
+    return 0;
+  }
+
   // Replace @code references with their values
   let expr = formula.replace(/@([a-z_]+)/gi, (_, code) => {
     const value = values.get(code.toLowerCase());

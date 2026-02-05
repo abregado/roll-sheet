@@ -1186,7 +1186,7 @@
     };
 
     if (type === 'derived') {
-      attribute.formula = '0';
+      attribute.formula = '';
     } else if (type === 'integer') {
       attribute.value = 0;
     } else {

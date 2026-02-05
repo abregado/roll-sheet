@@ -1,11 +1,9 @@
 ﻿## Small future ideas to consider
-- IMPORTANT: roll template buttons should not have split styles when there is only a single formula variant
 - adding images to represent each roll template. use them as either an icon, or an image based roll button
 - Using images in the roll history to create more drama. Drag an image onto a Roll Template the upload it and add it to the roll template.
 - support for multiple {results} using square brackets in dice formula ("[1d20][1d20]" gives {result} and {result2})
 - columns for attributes, so the user can have more of them side by side
 - when the server starts and detects no sheets.json, generate an empty one.
-- when making a new derived value, default to no formula. But add a special case that if a derived value has no formula, its value evaluates to zero. This is so that when a user makes a new derived attribute and then edits it, they see the default text in the formula box
 - new formula variant prefabs button to add Advantage/Disadvantage quickly
 - in the roll breakdown of history entries, show the code of the attributes used (eg: // 3 (@str)) inside the formula (eg:// 2d20dl: [3, 7] = 7 + 3 (@str) = 10)
 - BUG: There is some weirdness when reordering an item to the top or bottom of a list
