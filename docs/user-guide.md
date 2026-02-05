@@ -17,9 +17,11 @@ This guide covers everything you need to know to use Roll Sheet effectively.
 - [Character Sheets](#character-sheets)
 - [Read-Only Mode](#read-only-mode)
 - [Attributes](#attributes)
+- [Resources](#resources)
 - [Roll Templates](#roll-templates)
 - [Dice Notation](#dice-notation)
 - [Roll History](#roll-history)
+- [Ad Hoc Rolls](#ad-hoc-rolls)
 
 ---
 
@@ -142,6 +144,43 @@ Each attribute has a unique code used for references:
 
 ---
 
+## Resources
+
+Resources track expendable items like spell slots, hit dice, or ability uses with visual pip displays.
+
+### Creating a Resource
+
+1. Click **+ Resource** at the bottom of the Sheet Items list
+2. Enter a name (e.g., "Spell Slots")
+3. Set the maximum value
+4. Choose a pip shape and color
+5. Press Enter or click the checkmark to save
+
+### Maximum Value Formulas
+
+The maximum field can be a simple number or a formula referencing attributes:
+
+- `5` - Fixed maximum of 5
+- `@level` - Maximum equals your level attribute
+- `@proficiency+2` - Maximum based on proficiency bonus plus 2
+- `floor(@level/2)` - Half your level, rounded down
+
+This lets resources scale automatically as your character levels up.
+
+### Using Resources
+
+Click any pip to toggle it filled or empty. The current count updates automatically and syncs to all connected clients.
+
+### Pip Shapes
+
+Choose from various shapes to match your resource type:
+
+- **Basic**: Circle, Square, Diamond, Triangle, Hexagon, Star
+- **Thematic**: Heart, Shield, Skull, Flame, Lightning
+- **Dice**: d4, d6, d8, d10, d12, d20
+
+---
+
 ## Roll Templates
 
 Roll templates let you save and reuse dice formulas.
@@ -164,6 +203,26 @@ Each template can have multiple formula variants. For example, an attack roll mi
 
 When rolling, click the main button for the first variant, or use the dropdown for others.
 
+### Multi-Result Formulas
+
+Sometimes you want to roll multiple things at once, like an attack roll and damage roll together. Use square brackets to create multiple results:
+
+```
+[1d20+@attack][1d8+@str]
+```
+
+This rolls the attack and damage separately. In your display format, access each result with numbered placeholders:
+
+```
+{name} attacks: {result} to hit, {result2} damage
+```
+
+- `{result}` - First result (the attack roll)
+- `{result2}` - Second result (the damage roll)
+- `{result3}`, `{result4}`, etc. - Additional results if needed
+
+Without brackets, the entire formula is treated as a single result.
+
 ### Display Format
 
 Customize how roll results appear in history:
@@ -172,9 +231,23 @@ Customize how roll results appear in history:
 {name} attacks for {result} damage!
 ```
 
-- `{name}` - The sheet name (reserved placeholder)
-- `{code}` - Replaced with attribute value (e.g., `{str}` for strength)
-- `{result}` - The final roll total
+Available placeholders:
+
+- `{name}` - The sheet name
+- `{result}` - The first (or only) roll total
+- `{result2}`, `{result3}`, etc. - Additional result totals (for multi-result formulas)
+- `{variant}` - The name of the formula variant used (e.g., "Advantage")
+- `{code}` - Any attribute code resolves to its value (e.g., `{str}` shows strength)
+
+#### Using the Variant Tag
+
+When you have multiple formula variants (like Normal, Advantage, Disadvantage), use `{variant}` to show which one was rolled:
+
+```
+{name} rolls {variant}: {result}
+```
+
+This might display as "Gandalf rolls Advantage: 18" when rolling with advantage.
 
 ### Super Conditions
 
@@ -235,7 +308,38 @@ Each entry shows the display format with resolved values. Click the chevron to e
 
 ### Clearing History
 
-Click **Clear History** at the bottom to remove all entries. This affects all connected clients.
+Click the trash icon next to the "History" heading to clear all entries. This affects all connected clients.
+
+---
+
+## Ad Hoc Rolls
+
+Sometimes you need to make a quick roll without creating a template. On desktop, use the ad hoc roll field at the bottom of the history panel.
+
+### Making an Ad Hoc Roll
+
+Type your message with dice formulas in square brackets:
+
+```
+I attack the goblin [1d20+@str] and deal [1d8+@str] damage
+```
+
+Press Enter or click the play button to roll. The formulas are replaced with results:
+
+> I attack the goblin 17 and deal 6 damage
+
+### What You Can Do
+
+- Roll any dice formula: `[2d6]`, `[1d20+5]`, `[4d6kh3]`
+- Reference attributes from the current sheet: `[1d20+@dex]`
+- Include multiple rolls in one message: `[1d20] to hit, [2d6] damage`
+- Add flavor text around your rolls
+
+### Notes
+
+- Ad hoc rolls use attributes from the currently selected character sheet
+- The ad hoc roll field is only visible on desktop (landscape) mode
+- Results appear in the history panel like any other roll
 
 ---
 
