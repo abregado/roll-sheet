@@ -7,12 +7,10 @@
 - BUG: There is some weirdness when reordering an item to the top or bottom of a list
 - OR operator in formulas eg: // {@prof | @dex | 2} for "use prof if it exists, then dex, then 2"
 - conditionals in text formulas
-- option in roll templates to for the split button drop down from appearing, and then having it also show the first result. useful for rolls with many formulas.
 - New string attribute that takes a comma separated list. The user can select which option is currently selected using a dropdown.
 - button on history entries to copy the roll template to our current sheet
 - when a client rolls something, show the result in the middle of the screen.
 - more juice when a new non-super roll comes in
-- adhoc rolls
 - (i) icon that shows description text that the user can enter on an attribute/roll tempalte/or resource
 - short string description resource
 
