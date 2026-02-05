@@ -952,6 +952,10 @@ input {
   justify-content: center;
 }
 
+.roll-dropdown-btn[hidden] {
+  display: none;
+}
+
 .roll-dropdown-btn:hover:not(:disabled) {
   background-color: #4f46e5;
 }
@@ -960,6 +964,12 @@ input {
   background-color: #3a3a5a;
   color: #666;
   cursor: not-allowed;
+}
+
+.roll-dropdown-btn.variant-btn {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .roll-dropdown {

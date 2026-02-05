@@ -1661,7 +1661,7 @@
 
     nameEl.textContent = template.name;
 
-    const hasMultipleFormulas = template.formulas && template.formulas.length > 1;
+    const formulaCount = template.formulas ? template.formulas.length : 1;
 
     if (!validation.valid) {
       el.classList.add('template-invalid');
@@ -1674,8 +1674,20 @@
       rollBtn.disabled = false;
     }
 
-    // Setup split button if multiple formulas
-    if (hasMultipleFormulas) {
+    // Setup split button based on number of formulas
+    if (formulaCount === 2) {
+      // Two formulas: show second variant as direct button (no dropdown)
+      dropdownBtn.hidden = false;
+      dropdownBtn.innerHTML = '';
+      dropdownBtn.textContent = template.formulas[1].title || 'Option 2';
+      dropdownBtn.classList.add('variant-btn');
+      dropdownBtn.disabled = !validation.valid;
+      dropdownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        executeRoll(template.id, 1);
+      });
+    } else if (formulaCount > 2) {
+      // Three+ formulas: use dropdown
       dropdownBtn.hidden = false;
 
       // Populate dropdown with other formulas (skip first one)
@@ -1703,6 +1715,7 @@
         dropdown.hidden = true;
       });
     } else {
+      // Single formula: no split button
       rollBtnGroup.classList.add('single');
     }
 
