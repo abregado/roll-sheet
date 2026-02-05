@@ -1,7 +1,5 @@
 ﻿## Small future ideas to consider
-- IMPORTANT: separate scroll for character sheet and history on desktop view. The newest 2 history entries should always be visible when scrolling the history down. The new sheet button should always be at the bottom of the screen (sticky)
 - IMPORTANT: roll template buttons should not have split styles when there is only a single formula variant
-- IMPORTANT: On desktop support for dragging the divider between sheet and history to change the width of the columns. Save this as a client setting.
 - adding images to represent each roll template. use them as either an icon, or an image based roll button
 - Using images in the roll history to create more drama. Drag an image onto a Roll Template the upload it and add it to the roll template.
 - support for multiple {results} using square brackets in dice formula ("[1d20][1d20]" gives {result} and {result2})
@@ -18,6 +16,11 @@
 - New string attribute that takes a comma separated list. The user can select which option is currently selected using a dropdown.
 - button on history entries to copy the roll template to our current sheet
 - when a client rolls something, show the result in the middle of the screen.
+- more juice when a new non-super roll comes in
+- adhoc rolls
+- BUG: when one client makes a new sheet, all other clients get swapped to it
+- (i) icon that shows description text that the user can enter on an attribute/roll tempalte/or resource
+- short string description resource
 
 
 ## Big new features to add

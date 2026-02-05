@@ -1172,9 +1172,6 @@
       attribute.value = '';
     }
 
-    if (activeItem && activeItem.kind === 'attribute') {
-      queueInsert('attribute', activeItem.id);
-    }
     sendSheetAction({ type: 'createAttribute', sheetId: currentSheetId, attribute });
   }
 
@@ -1191,9 +1188,6 @@
       name,
     };
 
-    if (activeItem && activeItem.kind === 'heading') {
-      queueInsert('heading', activeItem.id);
-    }
     sendSheetAction({ type: 'createHeading', sheetId: currentSheetId, heading });
   }
 
@@ -1940,9 +1934,6 @@
       displayFormat: '{name} rolled {result}',
     };
 
-    if (activeItem && activeItem.kind === 'rollTemplate') {
-      queueInsert('rollTemplate', activeItem.id);
-    }
     sendSheetAction({ type: 'createRollTemplate', sheetId: currentSheetId, template });
   }
 
@@ -2374,9 +2365,6 @@
       color: '#6366f1',
     };
 
-    if (activeItem && activeItem.kind === 'resource') {
-      queueInsert('resource', activeItem.id);
-    }
     sendSheetAction({ type: 'createResource', sheetId: currentSheetId, resource });
   }
 
