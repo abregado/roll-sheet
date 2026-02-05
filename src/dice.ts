@@ -537,7 +537,8 @@ export function resolveDisplayFormat(
   format: string,
   attributes: Attribute[],
   total: number,
-  sheetName: string
+  sheetName: string,
+  variantTitle?: string
 ): string {
   let result = format;
 
@@ -546,6 +547,9 @@ export function resolveDisplayFormat(
 
   // Replace {name} with the sheet name (reserved code)
   result = result.replace(/\{name\}/gi, sheetName);
+
+  // Replace {variant} with the variant title (or empty string if not set)
+  result = result.replace(/\{variant\}/gi, variantTitle || '');
 
   // Replace {code} with attribute values
   result = result.replace(/\{([a-z_]+)\}/gi, (_, code) => {
@@ -609,7 +613,7 @@ export function executeRoll(
 
   // Resolve display format (uses sheet.name for {name})
   const displayFormat = template.displayFormat || `${template.name}: {result}`;
-  const displayText = resolveDisplayFormat(displayFormat, sheet.attributes, total, sheet.name);
+  const displayText = resolveDisplayFormat(displayFormat, sheet.attributes, total, sheet.name, formulaVariant.title);
 
   // Character name is now always the sheet name
   const characterName = sheet.name;

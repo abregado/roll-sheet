@@ -35,6 +35,7 @@ formulas: [
 
 - `{result}` - Final roll total
 - `{name}` - Sheet name
+- `{variant}` - The rolled formula variant's title (empty string if not set)
 - `{code}` - Any attribute code resolves to its value
 
 ## Validation

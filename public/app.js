@@ -1482,6 +1482,73 @@
   }
 
   // ============================================================
+  // Resource Max Evaluation
+  // ============================================================
+
+  // Evaluate a resource max formula (supports @att references including derived)
+  function evaluateResourceMax(maxFormula) {
+    if (!maxFormula || !currentSheet) {
+      return { value: 0, error: 'No formula' };
+    }
+
+    // If it's just a number, return it directly
+    const trimmed = maxFormula.toString().trim();
+    if (/^\d+$/.test(trimmed)) {
+      const value = parseInt(trimmed, 10);
+      return value >= 1 ? { value } : { value: 0, error: 'Must be at least 1' };
+    }
+
+    // Build attribute value map (including derived)
+    const attrValues = new Map();
+    for (const attr of currentSheet.attributes) {
+      if (attr.type === 'integer') {
+        attrValues.set(attr.code, attr.value);
+      }
+    }
+    // Second pass: evaluate derived attributes
+    for (const attr of currentSheet.attributes) {
+      if (attr.type === 'derived') {
+        const result = evaluateFormula(attr.formula);
+        if (!result.error) {
+          attrValues.set(attr.code, result.value);
+        }
+      }
+    }
+
+    // Replace @code references
+    let expression = trimmed;
+    const codeRegex = /@([a-z_]+)/g;
+    let match;
+    while ((match = codeRegex.exec(trimmed)) !== null) {
+      const code = match[1];
+      if (!attrValues.has(code)) {
+        return { value: 0, error: `Unknown: @${code}` };
+      }
+      expression = expression.replace(new RegExp('@' + code, 'g'), attrValues.get(code));
+    }
+
+    // Support ceil/floor
+    expression = expression.replace(/ceil\s*\(/g, 'Math.ceil(');
+    expression = expression.replace(/floor\s*\(/g, 'Math.floor(');
+
+    // Validate expression
+    if (!/^[\d\s+\-*/().Math,ceil floor]+$/.test(expression)) {
+      return { value: 0, error: 'Invalid formula' };
+    }
+
+    try {
+      const result = Function('"use strict"; return (' + expression + ')')();
+      if (typeof result !== 'number' || !isFinite(result)) {
+        return { value: 0, error: 'Invalid result' };
+      }
+      const value = Math.floor(result);
+      return value >= 1 ? { value } : { value: 0, error: 'Must be at least 1' };
+    } catch (e) {
+      return { value: 0, error: 'Eval error' };
+    }
+  }
+
+  // ============================================================
   // Validation
   // ============================================================
 
@@ -2171,17 +2238,30 @@
 
     nameEl.textContent = resource.name;
 
+    // Evaluate max formula
+    const maxResult = evaluateResourceMax(resource.maximum);
+    const evaluatedMax = maxResult.error ? 0 : maxResult.value;
+
     // Render pips
     pipsContainer.innerHTML = '';
-    for (let i = 0; i < resource.maximum; i++) {
-      const filled = i < resource.current;
-      const pip = document.createElement('button');
-      pip.className = `pip ${filled ? 'filled' : 'empty'}`;
-      pip.style.setProperty('--pip-color', resource.color);
-      pip.dataset.index = i;
-      pip.innerHTML = getPipSVG(resource.shape, filled);
-      pip.addEventListener('click', () => handlePipClick(resource, i));
-      pipsContainer.appendChild(pip);
+    if (maxResult.error) {
+      // Show error indicator
+      const errorSpan = document.createElement('span');
+      errorSpan.className = 'resource-max-error';
+      errorSpan.textContent = maxResult.error;
+      errorSpan.title = `Formula: ${resource.maximum}`;
+      pipsContainer.appendChild(errorSpan);
+    } else {
+      for (let i = 0; i < evaluatedMax; i++) {
+        const filled = i < resource.current;
+        const pip = document.createElement('button');
+        pip.className = `pip ${filled ? 'filled' : 'empty'}`;
+        pip.style.setProperty('--pip-color', resource.color);
+        pip.dataset.index = i;
+        pip.innerHTML = getPipSVG(resource.shape, filled);
+        pip.addEventListener('click', () => handlePipClick(resource, i));
+        pipsContainer.appendChild(pip);
+      }
     }
 
     editBtn.addEventListener('click', () => enterResourceEditMode(resource.id));
@@ -2233,7 +2313,7 @@
       if (e.key === 'Enter') {
         e.preventDefault();
         const selectedShape = shapeSelector.querySelector('.shape-option.selected')?.dataset.shape || resource.shape;
-        saveResource(resource.id, nameInput.value, parseInt(maxInput.value, 10), resource.current, selectedShape, colorInput.value);
+        saveResource(resource.id, nameInput.value, maxInput.value, resource.current, selectedShape, colorInput.value);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         exitResourceEditMode();
@@ -2245,7 +2325,7 @@
 
     saveBtn.addEventListener('click', () => {
       const selectedShape = shapeSelector.querySelector('.shape-option.selected')?.dataset.shape || resource.shape;
-      saveResource(resource.id, nameInput.value, parseInt(maxInput.value, 10), resource.current, selectedShape, colorInput.value);
+      saveResource(resource.id, nameInput.value, maxInput.value, resource.current, selectedShape, colorInput.value);
     });
 
     cancelBtn.addEventListener('click', () => exitResourceEditMode());
@@ -2304,21 +2384,23 @@
       return;
     }
 
-    if (!maximum || maximum < 1) {
-      alert('Maximum must be at least 1');
+    // Validate max formula
+    const maxResult = evaluateResourceMax(maximum);
+    if (maxResult.error) {
+      alert('Invalid maximum: ' + maxResult.error);
       return;
     }
 
     const resource = (currentSheet.resources || []).find(r => r.id === id);
     if (!resource) return;
 
-    // Clamp current to new maximum
-    const newCurrent = Math.min(current, maximum);
+    // Clamp current to evaluated maximum
+    const newCurrent = Math.min(current, maxResult.value);
 
     const updatedResource = {
       ...resource,
       name: name.trim(),
-      maximum: maximum,
+      maximum: maximum.toString().trim(),
       current: newCurrent,
       shape: shape,
       color: color,
@@ -2393,7 +2475,7 @@
     const resource = {
       type: 'resource',
       name,
-      maximum: 5,
+      maximum: '5',
       current: 5,
       shape: 'circle',
       color: '#6366f1',

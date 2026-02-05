@@ -48,7 +48,7 @@ export interface BaseResource {
 
 export interface ResourceItem extends BaseResource {
   type: 'resource';
-  maximum: number;
+  maximum: string; // formula or number, supports @att references
   current: number;
   shape: PipShape;
   color: string; // hex color like "#6366f1"

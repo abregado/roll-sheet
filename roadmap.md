@@ -8,7 +8,6 @@
 - when making a new derived value, default to no formula. But add a special case that if a derived value has no formula, its value evaluates to zero. This is so that when a user makes a new derived attribute and then edits it, they see the default text in the formula box
 - new formula variant prefabs button to add Advantage/Disadvantage quickly
 - in the roll breakdown of history entries, show the code of the attributes used (eg: // 3 (@str)) inside the formula (eg:// 2d20dl: [3, 7] = 7 + 3 (@str) = 10)
-- ability to use codes in a resource max field
 - BUG: There is some weirdness when reordering an item to the top or bottom of a list
 - OR operator in formulas eg: // {@prof | @dex | 2} for "use prof if it exists, then dex, then 2"
 - conditionals in text formulas

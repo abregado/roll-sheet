@@ -1456,6 +1456,13 @@ input {
   align-items: center;
 }
 
+/* Resource Max Formula Error */
+.resource-max-error {
+  color: #ef4444;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
 .pip {
   width: 24px;
   height: 24px;
