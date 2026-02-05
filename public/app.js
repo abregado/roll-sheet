@@ -12,8 +12,10 @@
   let editingHeadingId = null;
   let editingTemplateId = null;
   let editingResourceId = null;
+  let editingTextBlockId = null;
   let dragState = null;
   let collapsedHeadings = new Set(); // Track collapsed headings locally
+  let expandedTextBlocks = new Set(); // Track expanded collapsible text blocks locally
   let activeItem = null;
   let pendingInsert = null;
   let readOnlySheets = new Set(); // Track which sheets are in read-only mode (client-side only)
@@ -44,6 +46,7 @@
     resourcesList: document.getElementById('resources-list'),
     addResourceBtn: document.getElementById('add-resource-btn'),
     addResourceHeadingBtn: document.getElementById('add-resource-heading-btn'),
+    addTextBlockBtn: document.getElementById('add-text-block-btn'),
     exportSheetBtn: document.getElementById('export-sheet-btn'),
     copySheetBtn: document.getElementById('copy-sheet-btn'),
     deleteSheetBtn: document.getElementById('delete-sheet-btn'),
@@ -71,6 +74,8 @@
     resourceEdit: document.getElementById('resource-edit-template'),
     resourceHeadingView: document.getElementById('resource-heading-view-template'),
     resourceHeadingEdit: document.getElementById('resource-heading-edit-template'),
+    textBlockView: document.getElementById('text-block-view-template'),
+    textBlockEdit: document.getElementById('text-block-edit-template'),
   };
 
   // ============================================================
@@ -292,6 +297,7 @@
       if (editingAttributeId) exitEditMode();
       if (editingHeadingId) exitHeadingEditMode();
       if (editingTemplateId) exitTemplateEditMode();
+      if (editingTextBlockId) exitTextBlockEditMode();
       if (editingResourceId) exitResourceEditMode();
       if (isRenaming) cancelRename();
     }
@@ -558,6 +564,10 @@
         const { id, ...rest } = heading;
         return rest;
       }),
+      textBlocks: (currentSheet.textBlocks || []).map(tb => {
+        const { id, ...rest } = tb;
+        return rest;
+      }),
     };
 
     // Create and download the JSON file
@@ -693,6 +703,8 @@
         el = createTemplateElement(entry.item, currentHeadingId);
       } else if (entry.kind === 'resource') {
         el = createResourceElement(entry.item, currentHeadingId);
+      } else if (entry.kind === 'textBlock') {
+        el = createTextBlockElement(entry.item, currentHeadingId);
       }
 
       if (el) {
@@ -711,6 +723,7 @@
     if (kind === 'rollTemplate') return currentSheet.rollTemplates || [];
     if (kind === 'resource') return currentSheet.resources || [];
     if (kind === 'heading') return currentSheet.headings || [];
+    if (kind === 'textBlock') return currentSheet.textBlocks || [];
     return [];
   }
 
@@ -773,6 +786,8 @@
       sendSheetAction({ type: 'reorderResources', sheetId: currentSheetId, resourceIds: orderedIds });
     } else if (kind === 'heading') {
       sendSheetAction({ type: 'reorderHeadings', sheetId: currentSheetId, headingIds: orderedIds });
+    } else if (kind === 'textBlock') {
+      sendSheetAction({ type: 'reorderTextBlocks', sheetId: currentSheetId, textBlockIds: orderedIds });
     }
   }
 
@@ -2395,6 +2410,187 @@
   }
 
   // ============================================================
+  // Text Block Rendering
+  // ============================================================
+
+  function createTextBlockElement(textBlock, headingId) {
+    const isEditing = editingTextBlockId === textBlock.id;
+    const template = isEditing ? templates.textBlockEdit : templates.textBlockView;
+    const clone = template.content.cloneNode(true);
+    const el = clone.querySelector('.text-block-item');
+
+    el.dataset.textBlockId = textBlock.id;
+    el.dataset.kind = 'textBlock';
+    el.dataset.itemId = textBlock.id;
+    el.classList.add('sheet-item');
+
+    // Add indentation if under a heading
+    if (headingId) {
+      el.classList.add('indented');
+      el.dataset.headingId = headingId;
+      if (collapsedHeadings.has(headingId)) {
+        el.classList.add('collapsed');
+      }
+    }
+
+    if (isEditing) {
+      setupTextBlockEditMode(el, textBlock);
+    } else {
+      setupTextBlockViewMode(el, textBlock);
+    }
+
+    // Setup drag and drop (only in view mode)
+    if (!isEditing) {
+      setupUnifiedDragAndDrop(el, 'textBlock', textBlock.id);
+    }
+
+    return el;
+  }
+
+  function parseSimpleMarkdown(text) {
+    // Escape HTML first
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Parse markdown: __underline__, *bold*, _italic_
+    // Order matters: underline first (double underscore), then bold, then italic
+    html = html
+      .replace(/__([^_]+)__/g, '<u>$1</u>')
+      .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+      .replace(/_([^_]+)_/g, '<em>$1</em>');
+
+    return html;
+  }
+
+  function setupTextBlockViewMode(el, textBlock) {
+    const contentEl = el.querySelector('.text-block-content');
+    const editBtn = el.querySelector('.edit-btn');
+
+    // Apply collapsible class if needed
+    if (textBlock.collapsible) {
+      el.classList.add('collapsible');
+      if (expandedTextBlocks.has(textBlock.id)) {
+        el.classList.add('expanded');
+      }
+    }
+
+    // Render text with simple markdown
+    contentEl.innerHTML = parseSimpleMarkdown(textBlock.text || '');
+
+    // Handle click for collapsible text blocks
+    if (textBlock.collapsible) {
+      contentEl.addEventListener('click', () => toggleTextBlockExpand(textBlock.id));
+    }
+
+    editBtn.addEventListener('click', () => enterTextBlockEditMode(textBlock.id));
+  }
+
+  function setupTextBlockEditMode(el, textBlock) {
+    const textInput = el.querySelector('.edit-text-block-text');
+    const collapsibleCheck = el.querySelector('.edit-text-block-collapsible');
+    const saveBtn = el.querySelector('.save-btn');
+    const cancelBtn = el.querySelector('.cancel-btn');
+    const copyBtn = el.querySelector('.copy-btn');
+    const deleteBtn = el.querySelector('.delete-btn');
+
+    textInput.value = textBlock.text || '';
+    collapsibleCheck.checked = textBlock.collapsible || false;
+
+    // Handle keyboard shortcuts
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        exitTextBlockEditMode();
+      }
+      // Note: Enter doesn't save because it's a textarea (multiline input)
+    };
+
+    textInput.addEventListener('keydown', handleKeyDown);
+
+    saveBtn.addEventListener('click', () => {
+      saveTextBlock(textBlock.id, textInput.value, collapsibleCheck.checked);
+    });
+
+    cancelBtn.addEventListener('click', () => exitTextBlockEditMode());
+    copyBtn.addEventListener('click', () => duplicateTextBlock(textBlock.id));
+    deleteBtn.addEventListener('click', () => deleteTextBlock(textBlock.id));
+
+    // Focus text input
+    setTimeout(() => textInput.focus(), 0);
+  }
+
+  function enterTextBlockEditMode(id) {
+    editingTextBlockId = id;
+    renderUnifiedList();
+  }
+
+  function exitTextBlockEditMode() {
+    editingTextBlockId = null;
+    renderUnifiedList();
+  }
+
+  function saveTextBlock(id, text, collapsible) {
+    const textBlocks = currentSheet.textBlocks || [];
+    const textBlock = textBlocks.find(tb => tb.id === id);
+    if (!textBlock) return;
+
+    const updatedTextBlock = {
+      ...textBlock,
+      text,
+      collapsible,
+    };
+
+    sendSheetAction({ type: 'updateTextBlock', sheetId: currentSheetId, textBlock: updatedTextBlock });
+    exitTextBlockEditMode();
+  }
+
+  function deleteTextBlock(id) {
+    if (confirm('Delete this text block?')) {
+      sendSheetAction({ type: 'deleteTextBlock', sheetId: currentSheetId, textBlockId: id });
+      exitTextBlockEditMode();
+    }
+  }
+
+  function duplicateTextBlock(id) {
+    const textBlocks = currentSheet.textBlocks || [];
+    const textBlock = textBlocks.find(tb => tb.id === id);
+    if (!textBlock) return;
+
+    // Create duplicate text block data (without id and sort - server will assign)
+    const duplicateData = {
+      text: textBlock.text,
+      collapsible: textBlock.collapsible,
+    };
+
+    // Exit edit mode first
+    exitTextBlockEditMode();
+
+    // Send create request
+    queueInsert('textBlock', id);
+    sendSheetAction({ type: 'createTextBlock', sheetId: currentSheetId, textBlock: duplicateData });
+  }
+
+  function addTextBlock() {
+    const textBlock = {
+      text: '',
+      collapsible: false,
+    };
+
+    sendSheetAction({ type: 'createTextBlock', sheetId: currentSheetId, textBlock });
+  }
+
+  function toggleTextBlockExpand(id) {
+    if (expandedTextBlocks.has(id)) {
+      expandedTextBlocks.delete(id);
+    } else {
+      expandedTextBlocks.add(id);
+    }
+    renderUnifiedList();
+  }
+
+  // ============================================================
   // Pip Click Logic
   // ============================================================
 
@@ -2893,6 +3089,9 @@
     }
     if (elements.addResourceHeadingBtn) {
       elements.addResourceHeadingBtn.addEventListener('click', addHeading);
+    }
+    if (elements.addTextBlockBtn) {
+      elements.addTextBlockBtn.addEventListener('click', addTextBlock);
     }
 
     elements.deleteModal.addEventListener('click', (e) => {

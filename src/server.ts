@@ -9,6 +9,7 @@ import {
   RollTemplateRoll,
   Resource,
   Heading,
+  TextBlock,
   HistoryEntry,
   ClientMessage,
   ServerMessage,
@@ -101,7 +102,8 @@ type UnifiedItem =
   | { kind: 'attribute'; item: Attribute }
   | { kind: 'rollTemplate'; item: RollTemplate }
   | { kind: 'resource'; item: Resource }
-  | { kind: 'heading'; item: Heading };
+  | { kind: 'heading'; item: Heading }
+  | { kind: 'textBlock'; item: TextBlock };
 
 function buildUnifiedList(sheet: CharacterSheet): UnifiedItem[] {
   return [
@@ -109,6 +111,7 @@ function buildUnifiedList(sheet: CharacterSheet): UnifiedItem[] {
     ...sheet.rollTemplates.map((item) => ({ kind: 'rollTemplate' as const, item })),
     ...sheet.resources.map((item) => ({ kind: 'resource' as const, item })),
     ...sheet.headings.map((item) => ({ kind: 'heading' as const, item })),
+    ...(sheet.textBlocks || []).map((item) => ({ kind: 'textBlock' as const, item })),
   ].sort((a, b) => {
     if (a.item.sort !== b.item.sort) {
       return a.item.sort - b.item.sort;
@@ -132,6 +135,9 @@ function sortSheetLists(sheet: CharacterSheet): void {
   sheet.rollTemplates.sort((a, b) => a.sort - b.sort);
   sheet.resources.sort((a, b) => a.sort - b.sort);
   sheet.headings.sort((a, b) => a.sort - b.sort);
+  if (sheet.textBlocks) {
+    sheet.textBlocks.sort((a, b) => a.sort - b.sort);
+  }
 }
 
 function touchSheet(sheet: CharacterSheet): void {
@@ -179,8 +185,13 @@ function insertAfterLastKind(
     sheet.rollTemplates.push(newItem as RollTemplate);
   } else if (kind === 'resource') {
     sheet.resources.push(newItem as Resource);
-  } else {
+  } else if (kind === 'heading') {
     sheet.headings.push(newItem as Heading);
+  } else if (kind === 'textBlock') {
+    if (!sheet.textBlocks) {
+      sheet.textBlocks = [];
+    }
+    sheet.textBlocks.push(newItem as TextBlock);
   }
   sortSheetLists(sheet);
 }
@@ -198,7 +209,9 @@ function reorderKind(
         ? sheet.rollTemplates
         : kind === 'resource'
           ? sheet.resources
-          : sheet.headings;
+          : kind === 'heading'
+            ? sheet.headings
+            : sheet.textBlocks || [];
 
   const itemById = new Map(currentItems.map((item) => [item.id, item]));
   const orderedItems: UnifiedItem['item'][] = [];
@@ -327,6 +340,7 @@ function migrateLegacySheet(raw: Partial<CharacterSheet>): CharacterSheet {
     rollTemplates,
     resources,
     headings: [],
+    textBlocks: [],
   };
 }
 
@@ -346,6 +360,7 @@ function normalizeSheet(raw: Partial<CharacterSheet>): { sheet: CharacterSheet; 
     rollTemplates: Array.isArray(raw.rollTemplates) ? raw.rollTemplates : [],
     resources: Array.isArray(raw.resources) ? raw.resources : [],
     headings: Array.isArray(raw.headings) ? raw.headings : [],
+    textBlocks: Array.isArray(raw.textBlocks) ? raw.textBlocks : [],
   };
 
   const unified = buildUnifiedList(sheet);
@@ -363,6 +378,7 @@ function buildImportedSheet(sheetData: ExportedSheet): CharacterSheet {
   const rollTemplates = Array.isArray(sheetData.rollTemplates) ? sheetData.rollTemplates : [];
   const resources = Array.isArray(sheetData.resources) ? sheetData.resources : [];
   const headings = Array.isArray(sheetData.headings) ? sheetData.headings : [];
+  const textBlocks = Array.isArray(sheetData.textBlocks) ? sheetData.textBlocks : [];
 
   const legacyImport =
     hasLegacyHeading(attributes as unknown[]) ||
@@ -402,6 +418,7 @@ function buildImportedSheet(sheetData: ExportedSheet): CharacterSheet {
       rollTemplates: migratedTemplates,
       resources: migratedResources,
       headings: [],
+      textBlocks: [],
     };
   }
 
@@ -415,6 +432,7 @@ function buildImportedSheet(sheetData: ExportedSheet): CharacterSheet {
     rollTemplates: rollTemplates.map((tmpl) => ({ ...tmpl, id: generateId() })) as RollTemplate[],
     resources: resources.map((res) => ({ ...res, id: generateId() })) as Resource[],
     headings: headings.map((heading) => ({ ...heading, id: generateId() })) as Heading[],
+    textBlocks: textBlocks.map((tb) => ({ ...tb, id: generateId() })) as TextBlock[],
   };
 
   const unified = buildUnifiedList(importedSheet);
@@ -443,6 +461,7 @@ function createDefaultSheet(name?: string): CharacterSheet {
     rollTemplates: [],
     resources: [],
     headings: [],
+    textBlocks: [],
   };
 }
 
@@ -578,6 +597,10 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
         }));
         copiedSheet.headings = (copiedSheet.headings || []).map((heading) => ({
           ...heading,
+          id: generateId(),
+        }));
+        copiedSheet.textBlocks = (copiedSheet.textBlocks || []).map((tb) => ({
+          ...tb,
           id: generateId(),
         }));
         sheets.push(copiedSheet);
@@ -974,6 +997,94 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
           break;
         }
         reorderKind(sheet, 'heading', message.headingIds);
+        touchSheet(sheet);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'createTextBlock': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Create text block')) {
+          break;
+        }
+        const newTextBlock: TextBlock = {
+          ...message.textBlock,
+          id: generateId(),
+          sort: 0,
+        };
+        insertAfterLastKind(sheet, 'textBlock', newTextBlock);
+        touchSheet(sheet);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'updateTextBlock': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Update text block')) {
+          break;
+        }
+        if (!sheet.textBlocks) {
+          sheet.textBlocks = [];
+        }
+        const textBlockIndex = sheet.textBlocks.findIndex((tb) => tb.id === message.textBlock.id);
+        if (textBlockIndex !== -1) {
+          sheet.textBlocks[textBlockIndex] = message.textBlock;
+          sortSheetLists(sheet);
+          touchSheet(sheet);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Text block not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'deleteTextBlock': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Delete text block')) {
+          break;
+        }
+        if (!sheet.textBlocks) {
+          sheet.textBlocks = [];
+        }
+        const textBlockIndex = sheet.textBlocks.findIndex((tb) => tb.id === message.textBlockId);
+        if (textBlockIndex !== -1) {
+          sheet.textBlocks.splice(textBlockIndex, 1);
+          assignSortFromUnifiedList(buildUnifiedList(sheet));
+          sortSheetLists(sheet);
+          touchSheet(sheet);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Text block not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'reorderTextBlocks': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Reorder text blocks')) {
+          break;
+        }
+        reorderKind(sheet, 'textBlock', message.textBlockIds);
         touchSheet(sheet);
         saveSheets();
         broadcast({ type: 'sheetUpdated', sheet });

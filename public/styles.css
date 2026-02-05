@@ -1218,6 +1218,128 @@ input {
   display: none;
 }
 
+/* Text Block Items */
+.text-block-item {
+  background-color: #22223a;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 0.75rem;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+.text-block-item:hover {
+  background-color: #2a2a4a;
+}
+
+.text-block-item.editing {
+  background-color: #2a2a4a;
+  border: 1px solid #6366f1;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.text-block-item.dragging {
+  opacity: 0.5;
+  background-color: #3a3a5a;
+}
+
+.text-block-item.drag-over {
+  border-top: 2px solid #6366f1;
+}
+
+.text-block-item.indented {
+  margin-left: 1.5rem;
+}
+
+.text-block-item.indented.collapsed {
+  display: none;
+}
+
+.text-block-content {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+  color: #ccc;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Collapsible text block - collapsed state */
+.text-block-item.collapsible .text-block-content {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* Collapsible text block - expanded state */
+.text-block-item.collapsible.expanded .text-block-content {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* Non-collapsible text block */
+.text-block-item:not(.collapsible) .text-block-content {
+  white-space: pre-wrap;
+}
+
+.text-block-item:hover .edit-btn {
+  opacity: 1;
+}
+
+/* Text block edit mode */
+.text-block-edit-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.text-block-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.edit-text-block-text {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #6366f1;
+}
+
+/* Read-only mode for text blocks */
+.character-sheet.read-only .text-block-item {
+  grid-template-columns: 1fr;
+}
+
+.character-sheet.read-only .text-block-item .drag-handle,
+.character-sheet.read-only .text-block-item .edit-btn {
+  display: none;
+}
+
 .resource-item:hover .edit-btn {
   opacity: 1;
 }

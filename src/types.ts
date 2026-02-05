@@ -86,6 +86,14 @@ export interface Heading {
   sort: number;
 }
 
+// Text Block types
+export interface TextBlock {
+  id: string;
+  text: string;
+  collapsible: boolean;
+  sort: number;
+}
+
 // Character Sheet
 export interface CharacterSheet {
   id: string;
@@ -97,6 +105,7 @@ export interface CharacterSheet {
   rollTemplates: RollTemplate[];
   resources: Resource[];
   headings: Heading[];
+  textBlocks: TextBlock[];
 }
 
 // History Entry
@@ -155,6 +164,7 @@ export interface ExportedSheet {
   rollTemplates: Omit<RollTemplate, 'id'>[];
   resources?: Omit<Resource, 'id'>[];
   headings?: Omit<Heading, 'id'>[];
+  textBlocks?: Omit<TextBlock, 'id'>[];
 }
 
 export type ClientMessage =
@@ -181,10 +191,14 @@ export type ClientMessage =
   | { type: 'updateHeading'; sheetId: string; heading: Heading; sheetVersion: number }
   | { type: 'deleteHeading'; sheetId: string; headingId: string; sheetVersion: number }
   | { type: 'reorderHeadings'; sheetId: string; headingIds: string[]; sheetVersion: number }
+  | { type: 'createTextBlock'; sheetId: string; textBlock: Omit<TextBlock, 'id' | 'sort'>; sheetVersion: number }
+  | { type: 'updateTextBlock'; sheetId: string; textBlock: TextBlock; sheetVersion: number }
+  | { type: 'deleteTextBlock'; sheetId: string; textBlockId: string; sheetVersion: number }
+  | { type: 'reorderTextBlocks'; sheetId: string; textBlockIds: string[]; sheetVersion: number }
   | {
       type: 'reorderUnified';
       sheetId: string;
-      items: { kind: 'attribute' | 'rollTemplate' | 'resource' | 'heading'; id: string }[];
+      items: { kind: 'attribute' | 'rollTemplate' | 'resource' | 'heading' | 'textBlock'; id: string }[];
       sheetVersion: number;
     }
   | { type: 'getHistory' }
