@@ -52,6 +52,8 @@
     deleteSheetBtn: document.getElementById('delete-sheet-btn'),
     historyList: document.getElementById('history-list'),
     clearHistoryBtn: document.getElementById('clear-history-btn'),
+    adhocRollInput: document.getElementById('adhoc-roll-input'),
+    adhocRollBtn: document.getElementById('adhoc-roll-btn'),
     deleteModal: document.getElementById('delete-modal'),
     deleteCancelBtn: document.getElementById('delete-cancel-btn'),
     deleteConfirmBtn: document.getElementById('delete-confirm-btn'),
@@ -3130,6 +3132,15 @@
     }
   }
 
+  function executeAdhocRoll() {
+    const message = elements.adhocRollInput.value.trim();
+    if (!message) return;
+    if (!currentSheetId) return;
+
+    send({ type: 'adhocRoll', sheetId: currentSheetId, message });
+    elements.adhocRollInput.value = '';
+  }
+
   // ============================================================
   // Utilities
   // ============================================================
@@ -3182,6 +3193,15 @@
     elements.deleteCancelBtn.addEventListener('click', cancelDeleteSheet);
     elements.deleteConfirmBtn.addEventListener('click', confirmDeleteSheet);
     elements.clearHistoryBtn.addEventListener('click', clearHistory);
+
+    // Ad hoc roll
+    elements.adhocRollBtn.addEventListener('click', executeAdhocRoll);
+    elements.adhocRollInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executeAdhocRoll();
+      }
+    });
 
     // Rename sheet
     elements.renameBtn.addEventListener('click', startRename);

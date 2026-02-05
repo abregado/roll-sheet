@@ -37,8 +37,17 @@ Placeholders in display format are resolved:
 - Dropped dice shown with strikethrough
 - Multiple result groups shown separately with "Result 1:", "Result 2:" labels
 
+## Ad Hoc Rolls
+
+Users can type ad hoc rolls in the input field at the bottom of the history panel (desktop only).
+- Use `[formula]` syntax to embed rolls in the message text
+- Multiple rolls can be included in a single message
+- Example: "I attack the goblin [1d20+@str] and deal [1d8+@str] damage"
+- Attribute codes like `@str` are resolved from the currently selected sheet
+
 ## WebSocket Messages
 
 - `history` - Full history on connect
 - `roll` - New roll result broadcast
+- `adhocRoll` - Ad hoc roll with message text containing [formula] patterns
 - `clearHistory` - Clear all history

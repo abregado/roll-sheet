@@ -213,7 +213,8 @@ export type ClientMessage =
     }
   | { type: 'getHistory' }
   | { type: 'clearHistory' }
-  | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number };
+  | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number }
+  | { type: 'adhocRoll'; sheetId: string; message: string };
 
 export type ServerMessage =
   | { type: 'sheetList'; sheets: { id: string; name: string; initials?: string }[] }

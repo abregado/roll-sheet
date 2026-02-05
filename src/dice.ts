@@ -702,3 +702,104 @@ export function executeRoll(
     isSuper,
   };
 }
+
+/**
+ * Execute an ad hoc roll from a message with [formula] patterns
+ * Returns a history entry
+ */
+export function executeAdhocRoll(
+  sheet: CharacterSheet,
+  message: string,
+  generateId: () => string
+): HistoryEntry {
+  const attributeMap = buildAttributeMap(sheet.attributes);
+
+  // Find all [formula] patterns in the message
+  const formulaRegex = /\[([^\]]+)\]/g;
+  const resultGroups: ResultGroup[] = [];
+  const totals: number[] = [];
+
+  let match;
+  while ((match = formulaRegex.exec(message)) !== null) {
+    const groupFormula = match[1];
+
+    try {
+      const { tokens, attributeRefs } = parseFormula(groupFormula);
+
+      // Check all attribute references exist
+      for (const ref of attributeRefs) {
+        if (!attributeMap.has(ref)) {
+          throw new Error(`Unknown attribute: @${ref}`);
+        }
+      }
+
+      const { diceResults, total, expandedFormula } = evaluateFormula(tokens, attributeMap);
+
+      // Build attributes used list for this group
+      const attributesUsed: { code: string; name: string; value: number | string }[] = [];
+      for (const ref of attributeRefs) {
+        const attr = sheet.attributes.find((a) => 'code' in a && a.code === ref);
+        if (attr && 'value' in attr) {
+          attributesUsed.push({ code: ref, name: attr.name, value: attr.value });
+        } else if (attr && 'formula' in attr) {
+          attributesUsed.push({ code: ref, name: attr.name, value: attributeMap.get(ref) ?? 0 });
+        }
+      }
+
+      resultGroups.push({
+        formula: groupFormula,
+        expandedFormula,
+        diceResults,
+        attributesUsed,
+        total,
+      });
+      totals.push(total);
+    } catch (err) {
+      // If a formula fails, push an error result
+      resultGroups.push({
+        formula: groupFormula,
+        expandedFormula: 'Error',
+        diceResults: [],
+        attributesUsed: [],
+        total: 0,
+      });
+      totals.push(0);
+    }
+  }
+
+  // Replace [formula] patterns with results in display text
+  let resultIndex = 0;
+  const displayText = message.replace(formulaRegex, () => {
+    const total = totals[resultIndex++];
+    return String(total);
+  });
+
+  // Use first result group as primary details, or create empty details if no rolls
+  const primaryGroup = resultGroups[0] || {
+    formula: '',
+    expandedFormula: '',
+    diceResults: [],
+    attributesUsed: [],
+    total: 0,
+  };
+
+  const details: RollDetails = {
+    formula: resultGroups.map((g) => g.formula).join(' | '),
+    expandedFormula: primaryGroup.expandedFormula,
+    diceResults: primaryGroup.diceResults,
+    attributesUsed: primaryGroup.attributesUsed,
+    total: primaryGroup.total,
+    resultGroups: resultGroups.length > 1 ? resultGroups : undefined,
+  };
+
+  return {
+    id: generateId(),
+    timestamp: Date.now(),
+    sheetId: sheet.id,
+    characterName: sheet.name,
+    templateName: 'Ad Hoc',
+    displayText,
+    details,
+    isSuper: false,
+  };
+}

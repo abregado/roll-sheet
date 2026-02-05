@@ -15,7 +15,7 @@ import {
   ServerMessage,
   ExportedSheet,
 } from './types';
-import { executeRoll, isReservedCode } from './dice';
+import { executeRoll, executeAdhocRoll, isReservedCode } from './dice';
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, '../data');
@@ -1158,6 +1158,31 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
       try {
         const entry = executeRoll(sheet, template as RollTemplateRoll, formulaIndex, generateId);
         history.unshift(entry); // Add to beginning of history
+        saveHistory();
+        broadcast({ type: 'historyEntry', entry });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Roll failed';
+        send(ws, { type: 'error', message: errorMessage });
+      }
+      break;
+    }
+
+    case 'adhocRoll': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (!sheet) {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+        break;
+      }
+
+      const userMessage = message.message?.trim();
+      if (!userMessage) {
+        send(ws, { type: 'error', message: 'Empty message' });
+        break;
+      }
+
+      try {
+        const entry = executeAdhocRoll(sheet, userMessage, generateId);
+        history.unshift(entry);
         saveHistory();
         broadcast({ type: 'historyEntry', entry });
       } catch (err) {

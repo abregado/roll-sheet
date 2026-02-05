@@ -1616,6 +1616,103 @@ input {
   flex-direction: column;
 }
 
+/* History Panel Header with title and clear button */
+.history-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+.history-panel-header h2 {
+  margin: 0;
+}
+
+/* Icon button (used for clear history) */
+.icon-btn {
+  background: none;
+  border: none;
+  color: #666;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Ad hoc roll input container */
+.adhoc-roll-container {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding-top: 1rem;
+  border-top: 1px solid #2a2a4a;
+  margin-top: auto;
+}
+
+.adhoc-roll-input {
+  flex: 1;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #3a3a5a;
+  border-radius: 6px;
+  background-color: #1a1a2e;
+  color: #fff;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.adhoc-roll-input:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.adhoc-roll-input::placeholder {
+  color: #555;
+}
+
+.adhoc-roll-btn {
+  padding: 0.625rem 0.75rem;
+  background-color: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.adhoc-roll-btn:hover {
+  background-color: #4f46e5;
+}
+
+.adhoc-roll-btn:disabled {
+  background-color: #3a3a5a;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* Hide history panel header and ad hoc roll on mobile (portrait) */
+@media (orientation: portrait) {
+  .history-panel-header {
+    display: none;
+  }
+
+  .adhoc-roll-container {
+    display: none;
+  }
+}
+
 .history-list {
   flex: 1;
   min-height: 0; /* Allow shrinking in flex container */
