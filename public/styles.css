@@ -1696,11 +1696,48 @@ input {
 
 .die-result {
   color: #6366f1;
+  font-weight: 600;
 }
 
 .die-dropped {
   color: #ef4444;
   text-decoration: line-through;
+}
+
+.dice-group {
+  color: #888;
+}
+
+/* Result group styling for multi-result formulas */
+.result-group {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #3a3a5a;
+}
+
+.result-group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.result-group:first-child {
+  padding-top: 0;
+}
+
+.result-label {
+  color: #a78bfa;
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.roll-breakdown .roll-formula {
+  color: #888;
+  font-size: inherit;
+  margin-bottom: 0;
+}
+
+.roll-breakdown .roll-total {
+  color: #10b981;
+  font-weight: 600;
 }
 
 .attributes-used {

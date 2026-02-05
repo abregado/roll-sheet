@@ -120,12 +120,22 @@ export interface HistoryEntry {
   isSuper?: boolean; // true if super condition was met
 }
 
+export interface ResultGroup {
+  formula: string;
+  expandedFormula: string;
+  diceResults: DiceResult[];
+  attributesUsed: { code: string; name: string; value: number | string }[];
+  total: number;
+}
+
 export interface RollDetails {
   formula: string;
   expandedFormula: string;
   diceResults: DiceResult[];
   attributesUsed: { code: string; name: string; value: number | string }[];
   total: number;
+  // Multiple result groups for [bracket] syntax
+  resultGroups?: ResultGroup[];
 }
 
 export interface DiceResult {

@@ -4,6 +4,7 @@ import {
   ParsedFormula,
   DiceResult,
   RollDetails,
+  ResultGroup,
   HistoryEntry,
   CharacterSheet,
   RollTemplateRoll,
@@ -153,6 +154,28 @@ export function parseFormula(formula: string): ParsedFormula {
   }
 
   return { tokens, attributeRefs };
+}
+
+/**
+ * Split a formula into result groups using square bracket syntax
+ * "[1d20+@str][1d6]" -> ["1d20+@str", "1d6"]
+ * "1d20+@str" -> ["1d20+@str"] (no brackets = single group)
+ */
+export function splitFormulaGroups(formula: string): string[] {
+  const bracketRegex = /\[([^\]]+)\]/g;
+  const groups: string[] = [];
+  let match;
+
+  while ((match = bracketRegex.exec(formula)) !== null) {
+    groups.push(match[1]);
+  }
+
+  // If no brackets found, treat entire formula as single group
+  if (groups.length === 0) {
+    return [formula];
+  }
+
+  return groups;
 }
 
 /**
@@ -335,7 +358,7 @@ export function evaluateFormula(
         if (value === undefined) {
           throw new Error(`Unknown attribute: @${token.code}`);
         }
-        expandedParts.push(value.toString());
+        expandedParts.push(`${value} (@${token.code})`);
         evalValues.push(value);
         break;
       }
@@ -541,14 +564,20 @@ export function evaluateSuperCondition(
 export function resolveDisplayFormat(
   format: string,
   attributes: Attribute[],
-  total: number,
+  totals: number[],
   sheetName: string,
   variantTitle?: string
 ): string {
   let result = format;
 
-  // Replace {result} with the total
-  result = result.replace(/\{result\}/gi, total.toString());
+  // Replace {result} with the first total, {result2} with second, etc.
+  result = result.replace(/\{result(\d*)\}/gi, (_, num) => {
+    const index = num ? parseInt(num, 10) - 1 : 0; // {result} = index 0, {result2} = index 1
+    if (index >= 0 && index < totals.length) {
+      return totals[index].toString();
+    }
+    return '0';
+  });
 
   // Replace {name} with the sheet name (reserved code)
   result = result.replace(/\{name\}/gi, sheetName);
@@ -593,50 +622,73 @@ export function executeRoll(
     throw new Error('Invalid formula index');
   }
 
-  const { tokens, attributeRefs } = parseFormula(formulaVariant.formula);
   const attributeMap = buildAttributeMap(sheet.attributes);
 
-  // Check all attribute references exist
-  for (const ref of attributeRefs) {
-    if (!attributeMap.has(ref)) {
-      throw new Error(`Unknown attribute: @${ref}`);
+  // Split formula into result groups using [bracket] syntax
+  const formulaGroups = splitFormulaGroups(formulaVariant.formula);
+  const resultGroups: ResultGroup[] = [];
+  const totals: number[] = [];
+
+  // Process each formula group
+  for (const groupFormula of formulaGroups) {
+    const { tokens, attributeRefs } = parseFormula(groupFormula);
+
+    // Check all attribute references exist
+    for (const ref of attributeRefs) {
+      if (!attributeMap.has(ref)) {
+        throw new Error(`Unknown attribute: @${ref}`);
+      }
     }
+
+    const { diceResults, total, expandedFormula } = evaluateFormula(tokens, attributeMap);
+
+    // Build attributes used list for this group
+    const attributesUsed: { code: string; name: string; value: number | string }[] = [];
+    for (const ref of attributeRefs) {
+      const attr = sheet.attributes.find((a) => 'code' in a && a.code === ref);
+      if (attr && 'value' in attr) {
+        attributesUsed.push({ code: ref, name: attr.name, value: attr.value });
+      } else if (attr && 'formula' in attr) {
+        attributesUsed.push({ code: ref, name: attr.name, value: attributeMap.get(ref) ?? 0 });
+      }
+    }
+
+    resultGroups.push({
+      formula: groupFormula,
+      expandedFormula,
+      diceResults,
+      attributesUsed,
+      total,
+    });
+    totals.push(total);
   }
 
-  const { diceResults, total, expandedFormula } = evaluateFormula(tokens, attributeMap);
+  // For backward compatibility, use first group as primary details
+  const primaryGroup = resultGroups[0];
 
-  // Build attributes used list
-  const attributesUsed: { code: string; name: string; value: number | string }[] = [];
-  for (const ref of attributeRefs) {
-    const attr = sheet.attributes.find((a) => 'code' in a && a.code === ref);
-    if (attr && 'value' in attr) {
-      attributesUsed.push({ code: ref, name: attr.name, value: attr.value });
-    } else if (attr && 'formula' in attr) {
-      attributesUsed.push({ code: ref, name: attr.name, value: attributeMap.get(ref) ?? 0 });
-    }
-  }
-
-  // Resolve display format (uses sheet.name for {name})
+  // Resolve display format with all totals
   const displayFormat = template.displayFormat || `${template.name}: {result}`;
-  const displayText = resolveDisplayFormat(displayFormat, sheet.attributes, total, sheet.name, formulaVariant.title);
+  const displayText = resolveDisplayFormat(displayFormat, sheet.attributes, totals, sheet.name, formulaVariant.title);
 
   // Character name is now always the sheet name
   const characterName = sheet.name;
 
   const details: RollDetails = {
     formula: formulaVariant.formula,
-    expandedFormula,
-    diceResults,
-    attributesUsed,
-    total,
+    expandedFormula: primaryGroup.expandedFormula,
+    diceResults: primaryGroup.diceResults,
+    attributesUsed: primaryGroup.attributesUsed,
+    total: primaryGroup.total,
+    resultGroups: resultGroups.length > 1 ? resultGroups : undefined,
   };
 
-  // Calculate theoretical min/max for super condition evaluation
-  const { minimum, maximum } = calculateFormulaRange(tokens, attributeMap);
+  // Calculate theoretical min/max for super condition evaluation (uses first group)
+  const { tokens: primaryTokens } = parseFormula(primaryGroup.formula);
+  const { minimum, maximum } = calculateFormulaRange(primaryTokens, attributeMap);
 
-  // Check super condition
+  // Check super condition (uses first result)
   const isSuper = template.superCondition
-    ? evaluateSuperCondition(template.superCondition, total, minimum, maximum)
+    ? evaluateSuperCondition(template.superCondition, primaryGroup.total, minimum, maximum)
     : false;
 
   return {

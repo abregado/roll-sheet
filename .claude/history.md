@@ -20,8 +20,10 @@ Each entry contains:
 ## Display Format Resolution
 
 Placeholders in display format are resolved:
-- `{result}` → final roll total
+- `{result}` → first (or only) roll total
+- `{result2}`, `{result3}`, etc. → additional result group totals
 - `{name}` → sheet name
+- `{variant}` → formula variant title
 - `{code}` → attribute value
 
 ## UI Patterns
@@ -30,9 +32,10 @@ Placeholders in display format are resolved:
 - Shows resolved display format string
 
 ### Expanded View (click chevron)
-- Dice breakdown with individual rolls
+- Roll breakdown showing formula, expanded dice, and total
+- Attribute codes shown inline: `3 (@str)` in the expanded formula
 - Dropped dice shown with strikethrough
-- Attributes used listed with names (in purple) and values
+- Multiple result groups shown separately with "Result 1:", "Result 2:" labels
 
 ## WebSocket Messages
 

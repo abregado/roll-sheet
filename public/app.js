@@ -2051,21 +2051,41 @@
       return { valid: false, error: 'Formula is required' };
     }
 
-    // Find all @code references
-    const codeRegex = /@([a-z_]+)/g;
+    // Split by brackets to get formula groups
+    // "[1d20+@str][1d6]" -> ["1d20+@str", "1d6"]
+    // "1d20+@str" -> ["1d20+@str"]
+    const bracketRegex = /\[([^\]]+)\]/g;
+    const groups = [];
     let match;
+
+    while ((match = bracketRegex.exec(formula)) !== null) {
+      groups.push(match[1]);
+    }
+
+    // If no brackets, treat whole formula as single group
+    if (groups.length === 0) {
+      groups.push(formula);
+    }
+
+    // Validate each group
+    const codeRegex = /@([a-z_]+)/g;
     const missingCodes = [];
 
-    while ((match = codeRegex.exec(formula)) !== null) {
-      const code = match[1];
-      const attr = currentSheet.attributes.find(a => a.code === code);
+    for (const group of groups) {
+      codeRegex.lastIndex = 0; // Reset regex
+      while ((match = codeRegex.exec(group)) !== null) {
+        const code = match[1];
+        const attr = currentSheet.attributes.find(a => a.code === code);
 
-      if (!attr) {
-        missingCodes.push(code);
-      } else if (attr.type === 'heading') {
-        return { valid: false, error: `Cannot reference heading: @${code}` };
-      } else if (attr.type === 'string') {
-        return { valid: false, error: `Cannot use string in formula: @${code}` };
+        if (!attr) {
+          if (!missingCodes.includes(code)) {
+            missingCodes.push(code);
+          }
+        } else if (attr.type === 'heading') {
+          return { valid: false, error: `Cannot reference heading: @${code}` };
+        } else if (attr.type === 'string') {
+          return { valid: false, error: `Cannot use string in formula: @${code}` };
+        }
       }
     }
 
@@ -3009,7 +3029,7 @@
       el.dataset.isSuper = 'true';
     }
 
-    const hasDetails = entry.details.diceResults.length > 0 || entry.details.attributesUsed.length > 0;
+    const hasDetails = entry.details.diceResults.length > 0 || entry.details.attributesUsed.length > 0 || (entry.details.resultGroups && entry.details.resultGroups.length > 1);
 
     // Star icon SVG - only show immediately for existing entries
     const starIcon = showAsSuperImmediately ? `
@@ -3062,19 +3082,46 @@
     return el;
   }
 
-  function formatRollBreakdown(details) {
-    if (!details || !details.diceResults) return '';
+  function formatSingleGroupBreakdown(group, groupIndex) {
+    if (!group || !group.diceResults) return '';
 
-    return details.diceResults.map(dice => {
+    // Build the expanded formula display
+    // The expandedFormula already contains attribute codes like "3 (@str)"
+    const expandedFormula = group.expandedFormula || '';
+
+    // Format dice results with highlighting
+    let breakdown = expandedFormula;
+
+    // Replace dice notation placeholders with formatted results
+    group.diceResults.forEach(dice => {
       const rolls = dice.rolls.map((r, i) => {
         const kept = dice.kept[i];
         return kept
           ? `<span class="die-result">${r}</span>`
           : `<span class="die-dropped">${r}</span>`;
-      }).join(', ');
+      }).join(',');
 
-      return `${dice.notation}: [${rolls}] = ${dice.sum}`;
-    }).join(' ') + ` = ${details.total}`;
+      // Replace the first occurrence of [numbers] pattern with formatted dice
+      const dicePattern = /\[[^\]]+\]/;
+      breakdown = breakdown.replace(dicePattern, `<span class="dice-group">[${rolls}]</span>`);
+    });
+
+    const prefix = groupIndex !== undefined ? `<span class="result-label">Result ${groupIndex + 1}:</span> ` : '';
+    return `${prefix}<span class="roll-formula">${group.formula}</span> = ${breakdown} = <span class="roll-total">${group.total}</span>`;
+  }
+
+  function formatRollBreakdown(details) {
+    if (!details) return '';
+
+    // If there are multiple result groups, format each separately
+    if (details.resultGroups && details.resultGroups.length > 1) {
+      return details.resultGroups.map((group, i) =>
+        `<div class="result-group">${formatSingleGroupBreakdown(group, i)}</div>`
+      ).join('');
+    }
+
+    // Single group (backward compatible)
+    return formatSingleGroupBreakdown(details);
   }
 
   function clearHistory() {

@@ -31,9 +31,26 @@ formulas: [
 - All variants share the same display format
 - Each variant has a title and formula
 
+## Multiple Result Groups
+
+Use square brackets to create multiple independent results in a single roll:
+
+```
+[1d20+@str][1d6]
+```
+
+- Each bracketed section is evaluated separately
+- Results are accessible as `{result}`, `{result2}`, `{result3}`, etc.
+- Useful for attack + damage rolls, skill checks with modifiers, etc.
+- Without brackets, the entire formula is treated as a single result
+- Super conditions evaluate against the first result group only
+
+Example display format: `"{name} attacks: {result} to hit, {result2} damage"`
+
 ## Display Format Placeholders
 
-- `{result}` - Final roll total
+- `{result}` - First (or only) roll total
+- `{result2}`, `{result3}`, etc. - Additional result group totals
 - `{name}` - Sheet name
 - `{variant}` - The rolled formula variant's title (empty string if not set)
 - `{code}` - Any attribute code resolves to its value
