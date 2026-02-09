@@ -2959,6 +2959,7 @@
         p.vy += p.gravity;
         p.vx *= 0.98;
         p.life -= p.decay;
+        if (p.life <= 0) return;
 
         superCtx.beginPath();
         superCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
