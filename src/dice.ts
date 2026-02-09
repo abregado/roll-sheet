@@ -359,7 +359,7 @@ export function evaluateFormula(
           throw new Error(`Unknown attribute: @${token.code}`);
         }
         expandedParts.push(`${value} (@${token.code})`);
-        evalValues.push(value);
+        evalValues.push(value < 0 ? `(${value})` : value);
         break;
       }
 
@@ -451,8 +451,9 @@ export function calculateFormulaRange(
       case 'attribute': {
         const value = attributeValues.get(token.code);
         if (value !== undefined) {
-          minParts.push(value);
-          maxParts.push(value);
+          const wrapped = value < 0 ? `(${value})` : value;
+          minParts.push(wrapped);
+          maxParts.push(wrapped);
         } else {
           minParts.push(0);
           maxParts.push(0);

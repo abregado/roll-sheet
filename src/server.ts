@@ -17,7 +17,7 @@ import {
 } from './types';
 import { executeRoll, executeAdhocRoll, isReservedCode } from './dice';
 
-const PORT = process.env.PORT || 30000;
+const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, '../data');
 const SHEETS_FILE = path.join(DATA_DIR, 'sheets.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');

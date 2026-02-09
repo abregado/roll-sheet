@@ -4,7 +4,9 @@
       "Bash(npm install)",
       "Bash(npm run build:*)",
       "Bash(node:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vitest run:*)"
     ]
   }
 }
