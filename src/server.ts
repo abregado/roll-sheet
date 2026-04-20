@@ -14,13 +14,18 @@ import {
   ClientMessage,
   ServerMessage,
   ExportedSheet,
+  DiceConfig,
+  CustomDie,
+  DicePoolTemplate,
+  RolledDieInstance,
 } from './types';
 import { executeRoll, executeAdhocRoll, isReservedCode } from './dice';
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 30000;
 const DATA_DIR = path.join(__dirname, '../data');
 const SHEETS_FILE = path.join(DATA_DIR, 'sheets.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+const DICE_FILE = path.join(DATA_DIR, 'dice.json');
 const CURRENT_SCHEMA_VERSION = 2;
 const SORT_STEP = 1000;
 
@@ -32,6 +37,7 @@ if (!fs.existsSync(DATA_DIR)) {
 // In-memory data store
 let sheets: CharacterSheet[] = loadSheets();
 let history: HistoryEntry[] = loadHistory();
+let diceConfig: DiceConfig = loadDiceConfig();
 resetSheetVersions();
 
 // Load sheets from file
@@ -92,6 +98,51 @@ function saveHistory(): void {
   }
 }
 
+function makeDefaultDice(): DiceConfig {
+  const makeFaces = (count: number, start = 1) =>
+    Array.from({ length: count }, (_, i) => ({
+      kurzel: String(start + i),
+      color: '#6d28d9',
+      fontColor: '#ffffff',
+    }));
+  return {
+    dice: [
+      { id: 'd4', selectorKurzel: 'd4', backgroundShape: 'd4.svg', faces: makeFaces(4) },
+      { id: 'd6', selectorKurzel: 'd6', backgroundShape: 'd6.svg', faces: makeFaces(6) },
+      { id: 'd8', selectorKurzel: 'd8', backgroundShape: 'd8.svg', faces: makeFaces(8) },
+      { id: 'd10', selectorKurzel: 'd10', backgroundShape: 'd10.svg', faces: makeFaces(10) },
+      { id: 'd12', selectorKurzel: 'd12', backgroundShape: 'd12.svg', faces: makeFaces(12) },
+      { id: 'd20', selectorKurzel: 'd20', backgroundShape: 'd20.svg', faces: makeFaces(20) },
+    ],
+  };
+}
+
+function loadDiceConfig(): DiceConfig {
+  try {
+    if (fs.existsSync(DICE_FILE)) {
+      const data = fs.readFileSync(DICE_FILE, 'utf-8');
+      return JSON.parse(data) as DiceConfig;
+    }
+  } catch (err) {
+    console.error('Error loading dice config:', err);
+  }
+  const defaults = makeDefaultDice();
+  try {
+    fs.writeFileSync(DICE_FILE, JSON.stringify(defaults, null, 2));
+  } catch (err) {
+    console.error('Error saving default dice config:', err);
+  }
+  return defaults;
+}
+
+function saveDiceConfig(): void {
+  try {
+    fs.writeFileSync(DICE_FILE, JSON.stringify(diceConfig, null, 2));
+  } catch (err) {
+    console.error('Error saving dice config:', err);
+  }
+}
+
 function resetSheetVersions(): void {
   sheets.forEach((sheet) => {
     sheet.version = 0;
@@ -103,7 +154,8 @@ type UnifiedItem =
   | { kind: 'rollTemplate'; item: RollTemplate }
   | { kind: 'resource'; item: Resource }
   | { kind: 'heading'; item: Heading }
-  | { kind: 'textBlock'; item: TextBlock };
+  | { kind: 'textBlock'; item: TextBlock }
+  | { kind: 'dicePool'; item: DicePoolTemplate };
 
 function buildUnifiedList(sheet: CharacterSheet): UnifiedItem[] {
   return [
@@ -112,6 +164,7 @@ function buildUnifiedList(sheet: CharacterSheet): UnifiedItem[] {
     ...sheet.resources.map((item) => ({ kind: 'resource' as const, item })),
     ...sheet.headings.map((item) => ({ kind: 'heading' as const, item })),
     ...(sheet.textBlocks || []).map((item) => ({ kind: 'textBlock' as const, item })),
+    ...(sheet.dicePoolTemplates || []).map((item) => ({ kind: 'dicePool' as const, item })),
   ].sort((a, b) => {
     if (a.item.sort !== b.item.sort) {
       return a.item.sort - b.item.sort;
@@ -137,6 +190,9 @@ function sortSheetLists(sheet: CharacterSheet): void {
   sheet.headings.sort((a, b) => a.sort - b.sort);
   if (sheet.textBlocks) {
     sheet.textBlocks.sort((a, b) => a.sort - b.sort);
+  }
+  if (sheet.dicePoolTemplates) {
+    sheet.dicePoolTemplates.sort((a, b) => a.sort - b.sort);
   }
 }
 
@@ -192,6 +248,11 @@ function insertAfterLastKind(
       sheet.textBlocks = [];
     }
     sheet.textBlocks.push(newItem as TextBlock);
+  } else if (kind === 'dicePool') {
+    if (!sheet.dicePoolTemplates) {
+      sheet.dicePoolTemplates = [];
+    }
+    sheet.dicePoolTemplates.push(newItem as DicePoolTemplate);
   }
   sortSheetLists(sheet);
 }
@@ -211,7 +272,9 @@ function reorderKind(
           ? sheet.resources
           : kind === 'heading'
             ? sheet.headings
-            : sheet.textBlocks || [];
+            : kind === 'textBlock'
+              ? sheet.textBlocks || []
+              : sheet.dicePoolTemplates || [];
 
   const itemById = new Map(currentItems.map((item) => [item.id, item]));
   const orderedItems: UnifiedItem['item'][] = [];
@@ -361,6 +424,7 @@ function normalizeSheet(raw: Partial<CharacterSheet>): { sheet: CharacterSheet; 
     resources: Array.isArray(raw.resources) ? raw.resources : [],
     headings: Array.isArray(raw.headings) ? raw.headings : [],
     textBlocks: Array.isArray(raw.textBlocks) ? raw.textBlocks : [],
+    dicePoolTemplates: Array.isArray(raw.dicePoolTemplates) ? raw.dicePoolTemplates : [],
   };
 
   const unified = buildUnifiedList(sheet);
@@ -607,6 +671,10 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
         }));
         copiedSheet.textBlocks = (copiedSheet.textBlocks || []).map((tb) => ({
           ...tb,
+          id: generateId(),
+        }));
+        copiedSheet.dicePoolTemplates = (copiedSheet.dicePoolTemplates || []).map((dpt) => ({
+          ...dpt,
           id: generateId(),
         }));
         sheets.push(copiedSheet);
@@ -1192,6 +1260,202 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
       break;
     }
 
+    case 'getDiceConfig': {
+      send(ws, { type: 'diceConfig', config: diceConfig });
+      break;
+    }
+
+    case 'updateDiceConfig': {
+      if (!message.config || !Array.isArray(message.config.dice)) {
+        send(ws, { type: 'error', message: 'Invalid dice config' });
+        break;
+      }
+      diceConfig = message.config;
+      saveDiceConfig();
+      broadcast({ type: 'diceConfig', config: diceConfig });
+      break;
+    }
+
+    case 'rollPool': {
+      const dieIds = message.dieIds;
+      if (!Array.isArray(dieIds) || dieIds.length === 0) {
+        send(ws, { type: 'error', message: 'Empty pool' });
+        break;
+      }
+
+      const usedDieMap = new Map<string, CustomDie>();
+      dieIds.forEach((id) => {
+        const die = diceConfig.dice.find((d) => d.id === id);
+        if (die) usedDieMap.set(id, die);
+      });
+
+      const diceSnapshot = Array.from(usedDieMap.values());
+
+      const diceInstances: RolledDieInstance[] = dieIds.map((dieId) => {
+        const die = usedDieMap.get(dieId);
+        const instanceId = generateId();
+        if (!die || die.faces.length === 0) {
+          return { instanceId, dieId, faceIndex: 0 };
+        }
+        const faceIndex = Math.floor(Math.random() * die.faces.length);
+        return { instanceId, dieId, faceIndex };
+      });
+
+      const entry: HistoryEntry = {
+        id: generateId(),
+        timestamp: Date.now(),
+        sheetId: message.sheetId || '',
+        characterName: '',
+        templateName: 'Dice Pool',
+        displayText: `Rolled ${dieIds.length} dice`,
+        details: { formula: '', expandedFormula: '', diceResults: [], attributesUsed: [], total: 0 },
+        kind: 'dicePool',
+        diceInstances,
+        diceSnapshot,
+      };
+
+      history.unshift(entry);
+      saveHistory();
+      broadcast({ type: 'historyEntry', entry });
+      break;
+    }
+
+    case 'rerollPoolDie': {
+      const entryIndex = history.findIndex((e) => e.id === message.historyEntryId);
+      if (entryIndex === -1) {
+        send(ws, { type: 'error', message: 'History entry not found' });
+        break;
+      }
+
+      const entry = history[entryIndex];
+      if (entry.kind !== 'dicePool' || !entry.diceInstances || !entry.diceSnapshot) {
+        send(ws, { type: 'error', message: 'Not a dice pool entry' });
+        break;
+      }
+
+      const instanceIndex = entry.diceInstances.findIndex((i) => i.instanceId === message.instanceId);
+      if (instanceIndex === -1) {
+        send(ws, { type: 'error', message: 'Die instance not found' });
+        break;
+      }
+
+      const original = entry.diceInstances[instanceIndex];
+      if (original.isRerolled) {
+        send(ws, { type: 'error', message: 'Die already rerolled' });
+        break;
+      }
+
+      const die = entry.diceSnapshot.find((d) => d.id === original.dieId);
+      if (!die || die.faces.length === 0) {
+        send(ws, { type: 'error', message: 'Die not found in snapshot' });
+        break;
+      }
+
+      const newFaceIndex = Math.floor(Math.random() * die.faces.length);
+      const newInstanceId = generateId();
+
+      entry.diceInstances[instanceIndex] = {
+        ...original,
+        isRerolled: true,
+        rerolledByInstanceId: newInstanceId,
+      };
+
+      entry.diceInstances.push({
+        instanceId: newInstanceId,
+        dieId: original.dieId,
+        faceIndex: newFaceIndex,
+        rerolledFromInstanceId: original.instanceId,
+      });
+
+      saveHistory();
+      broadcast({ type: 'historyEntryUpdated', entry });
+      break;
+    }
+
+    case 'createDicePoolTemplate': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Create dice pool template')) {
+          break;
+        }
+        const newTemplate: DicePoolTemplate = {
+          ...message.template,
+          id: generateId(),
+          sort: 0,
+        };
+        insertAfterLastKind(sheet, 'dicePool', newTemplate);
+        touchSheet(sheet);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'updateDicePoolTemplate': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Update dice pool template')) {
+          break;
+        }
+        if (!sheet.dicePoolTemplates) sheet.dicePoolTemplates = [];
+        const idx = sheet.dicePoolTemplates.findIndex((t) => t.id === message.template.id);
+        if (idx !== -1) {
+          sheet.dicePoolTemplates[idx] = message.template;
+          sortSheetLists(sheet);
+          touchSheet(sheet);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Dice pool template not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'deleteDicePoolTemplate': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Delete dice pool template')) {
+          break;
+        }
+        if (!sheet.dicePoolTemplates) sheet.dicePoolTemplates = [];
+        const idx = sheet.dicePoolTemplates.findIndex((t) => t.id === message.templateId);
+        if (idx !== -1) {
+          sheet.dicePoolTemplates.splice(idx, 1);
+          assignSortFromUnifiedList(buildUnifiedList(sheet));
+          sortSheetLists(sheet);
+          touchSheet(sheet);
+          saveSheets();
+          broadcast({ type: 'sheetUpdated', sheet });
+        } else {
+          send(ws, { type: 'error', message: 'Dice pool template not found' });
+        }
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
+    case 'reorderDicePoolTemplates': {
+      const sheet = sheets.find((s) => s.id === message.sheetId);
+      if (sheet) {
+        if (!ensureSheetVersion(ws, sheet, message, 'Reorder dice pool templates')) {
+          break;
+        }
+        reorderKind(sheet, 'dicePool', message.templateIds);
+        touchSheet(sheet);
+        saveSheets();
+        broadcast({ type: 'sheetUpdated', sheet });
+      } else {
+        send(ws, { type: 'error', message: 'Sheet not found' });
+      }
+      break;
+    }
+
     default:
       send(ws, { type: 'error', message: 'Unknown message type' });
   }
@@ -1200,6 +1464,7 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
 wss.on('connection', (ws) => {
   console.log('Client connected');
   clients.add(ws);
+  send(ws, { type: 'diceConfig', config: diceConfig });
 
   ws.on('message', (data) => {
     try {

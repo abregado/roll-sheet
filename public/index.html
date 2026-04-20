@@ -11,14 +11,31 @@
   <div class="app-container">
     <!-- Sheet Sidebar -->
     <aside class="sheet-sidebar">
-      <button class="sheet-icon add-sheet" id="add-sheet-btn" title="Add new sheet">+</button>
-      <div class="sheet-icons" id="sheet-icons">
-        <!-- Sheet icons dynamically populated -->
+      <!-- App-wide navigation buttons -->
+      <div class="sidebar-app-section">
+        <button class="sidebar-app-btn" id="pooler-nav-btn" title="Dice Pooler">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="8" width="6" height="6" rx="1"/>
+            <rect x="9" y="8" width="6" height="6" rx="1"/>
+            <rect x="16" y="8" width="6" height="6" rx="1"/>
+          </svg>
+        </button>
+      </div>
+      <div class="sidebar-divider"></div>
+      <!-- Per-sheet navigation -->
+      <div class="sidebar-sheet-section">
+        <button class="sheet-icon add-sheet" id="add-sheet-btn" title="Add new sheet">+</button>
+        <div class="sheet-icons" id="sheet-icons">
+          <!-- Sheet icons dynamically populated -->
+        </div>
       </div>
     </aside>
 
-    <!-- Character Sheet Column -->
-    <main class="character-sheet">
+    <!-- View Panel (sheet or dice pooler) -->
+    <main class="view-panel">
+
+      <!-- Sheet View -->
+      <div id="view-sheet">
       <div class="sheet-header">
         <div class="sheet-title-row">
           <h1 class="sheet-name" id="sheet-name">Character Sheet</h1>
@@ -69,6 +86,7 @@
           <button class="add-btn" id="add-template-btn">+ Roll Template</button>
           <button class="add-btn" id="add-resource-btn">+ Resource</button>
           <button class="add-btn" id="add-text-block-btn">+ Text Block</button>
+          <button class="add-btn" id="add-dice-pool-template-btn">+ Dice Pool</button>
         </div>
       </section>
 
@@ -78,6 +96,82 @@
         <button class="secondary-btn" id="copy-sheet-btn">Copy Sheet</button>
         <button class="danger-btn" id="delete-sheet-btn">Delete Sheet</button>
       </section>
+
+      </div><!-- end #view-sheet -->
+
+      <!-- Dice Pooler View -->
+      <div id="view-dice-pooler" hidden>
+        <div class="pooler-header">
+          <h1 class="pooler-title">Dice Pooler</h1>
+          <button class="pooler-lock-btn" id="pooler-edit-btn" title="Toggle edit mode">
+            <!-- Open padlock (edit mode) -->
+            <svg class="lock-icon lock-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 9.9-1" transform="translate(24, 0) scale(-1, 1)"></path>
+            </svg>
+            <!-- Closed padlock (locked mode) -->
+            <svg class="lock-icon lock-closed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Dice Selector section -->
+        <div id="pooler-selector-section" class="pooler-section">
+          <div class="pooler-section-heading">Dice</div>
+          <div id="pooler-selector" class="pooler-selector">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Dice Configurator (edit mode) -->
+        <div id="pooler-configurator" class="pooler-configurator" hidden>
+          <div class="pooler-section-heading">Configurator</div>
+          <div class="configurator-layout">
+            <div class="configurator-die-list" id="configurator-die-list">
+              <!-- Die list items populated dynamically -->
+            </div>
+            <div class="configurator-die-detail" id="configurator-die-detail">
+              <div class="configurator-empty-state">Select a die to configure</div>
+            </div>
+          </div>
+          <div class="configurator-footer">
+            <button class="add-btn" id="configurator-add-die-btn">+ Add Die</button>
+            <div class="configurator-actions">
+              <button class="save-btn" id="configurator-save-btn" title="Save all changes">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+                </svg>
+              </button>
+              <button class="cancel-btn" id="configurator-cancel-btn" title="Discard changes">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pool section -->
+        <div id="pooler-pool-section" class="pooler-section">
+          <div class="pooler-section-heading">Pool</div>
+          <div class="pooler-pool" id="pooler-pool">
+            <div class="empty-state">Click dice above to add them</div>
+          </div>
+          <div class="pooler-actions">
+            <button class="roll-btn" id="pool-roll-btn">Roll Pool</button>
+            <button class="secondary-btn" id="pool-clear-btn">Clear</button>
+            <div class="pool-save-group">
+              <button class="secondary-btn" id="pool-save-btn">Save as Template</button>
+              <select id="pool-save-sheet-select" class="pool-sheet-select">
+                <!-- Options populated dynamically -->
+              </select>
+            </div>
+          </div>
+        </div>
+      </div><!-- end #view-dice-pooler -->
+
     </main>
 
     <!-- Resizable Divider -->
@@ -655,6 +749,77 @@
           </svg>
         </button>
         <button class="delete-btn" title="Delete text block">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675a.75.75 0 10-1.492.15l.66 6.6A1.75 1.75 0 005.405 15h5.19c.9 0 1.652-.681 1.741-1.576l.66-6.6a.75.75 0 00-1.492-.149l-.66 6.6a.25.25 0 01-.249.225h-5.19a.25.25 0 01-.249-.225l-.66-6.6z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Dice Pool Template (View Mode) -->
+  <template id="dice-pool-template-view-template">
+    <div class="dice-pool-template-item" data-dpt-id="">
+      <div class="drag-handle" title="Drag to reorder">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="5" cy="4" r="1.5"/>
+          <circle cx="11" cy="4" r="1.5"/>
+          <circle cx="5" cy="8" r="1.5"/>
+          <circle cx="11" cy="8" r="1.5"/>
+          <circle cx="5" cy="12" r="1.5"/>
+          <circle cx="11" cy="12" r="1.5"/>
+        </svg>
+      </div>
+      <span class="dpt-name"></span>
+      <div class="dpt-dice-preview"></div>
+      <div class="dpt-actions">
+        <button class="roll-btn dpt-roll-btn" title="Roll this pool">Roll</button>
+        <button class="secondary-btn dpt-load-btn" title="Load into Dice Pooler">Load</button>
+        <button class="edit-btn" title="Edit template">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 4.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zM6 8a2 2 0 114 0 2 2 0 01-4 0z"/>
+            <path d="M8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zm-7-5a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5H1.75A.75.75 0 011 8zm13 0a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 0114 8zm-9.66 3.66a.75.75 0 010-1.06l1.06-1.06a.75.75 0 111.06 1.06l-1.06 1.06a.75.75 0 01-1.06 0zm7.32-7.32a.75.75 0 010-1.06l1.06-1.06a.75.75 0 111.06 1.06l-1.06 1.06a.75.75 0 01-1.06 0zm-7.32 0a.75.75 0 01-1.06 0L2.22 3.28a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 010 1.06zm7.32 7.32a.75.75 0 01-1.06 0l-1.06-1.06a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 010 1.06z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Dice Pool Template (Edit Mode) -->
+  <template id="dice-pool-template-edit-template">
+    <div class="dice-pool-template-item editing" data-dpt-id="">
+      <div class="drag-handle disabled">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="5" cy="4" r="1.5"/>
+          <circle cx="11" cy="4" r="1.5"/>
+          <circle cx="5" cy="8" r="1.5"/>
+          <circle cx="11" cy="8" r="1.5"/>
+          <circle cx="5" cy="12" r="1.5"/>
+          <circle cx="11" cy="12" r="1.5"/>
+        </svg>
+      </div>
+      <div class="dpt-edit-content">
+        <input type="text" class="edit-input edit-dpt-name" placeholder="Template name" />
+        <div class="dpt-dice-preview readonly"></div>
+      </div>
+      <div class="edit-actions">
+        <button class="save-btn" title="Save changes">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+          </svg>
+        </button>
+        <button class="cancel-btn" title="Cancel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
+          </svg>
+        </button>
+        <button class="copy-btn" title="Duplicate template">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"/>
+            <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"/>
+          </svg>
+        </button>
+        <button class="delete-btn" title="Delete template">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675a.75.75 0 10-1.492.15l.66 6.6A1.75 1.75 0 005.405 15h5.19c.9 0 1.652-.681 1.741-1.576l.66-6.6a.75.75 0 00-1.492-.149l-.66 6.6a.25.25 0 01-.249.225h-5.19a.25.25 0 01-.249-.225l-.66-6.6z"/>
           </svg>

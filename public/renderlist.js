@@ -1,7 +1,7 @@
 (function() {
   'use strict';
 
-  const TYPE_ORDER = ['heading', 'attribute', 'rollTemplate', 'resource', 'textBlock'];
+  const TYPE_ORDER = ['heading', 'attribute', 'rollTemplate', 'resource', 'textBlock', 'dicePool'];
   const TYPE_RANK = TYPE_ORDER.reduce((acc, type, index) => {
     acc[type] = index;
     return acc;
@@ -15,6 +15,7 @@
     (sheet.rollTemplates || []).forEach((item) => unified.push({ kind: 'rollTemplate', item }));
     (sheet.resources || []).forEach((item) => unified.push({ kind: 'resource', item }));
     (sheet.textBlocks || []).forEach((item) => unified.push({ kind: 'textBlock', item }));
+    (sheet.dicePoolTemplates || []).forEach((item) => unified.push({ kind: 'dicePool', item }));
 
     unified.sort((a, b) => {
       if (a.item.sort !== b.item.sort) {

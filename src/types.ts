@@ -106,6 +106,46 @@ export interface CharacterSheet {
   resources: Resource[];
   headings: Heading[];
   textBlocks: TextBlock[];
+  dicePoolTemplates?: DicePoolTemplate[];
+}
+
+// === DICE POOLER ===
+
+export interface DiceFace {
+  kurzel: string;       // 1-2 char shown as the roll result
+  color: string;        // background hex color e.g. "#6366f1"
+  fontColor: string;    // text hex color e.g. "#ffffff"
+  faceImage?: string;   // SVG filename from public/svg/faces/
+  superShape?: string;  // particle SVG filename from public/svg/particles/
+  superColor?: string;  // hex color for super effect particles
+}
+
+export interface CustomDie {
+  id: string;
+  selectorKurzel: string;   // label shown in selector/pool buttons (e.g. "d6")
+  backgroundShape: string;  // SVG filename from public/svg/dice/ (e.g. "d6.svg")
+  faces: DiceFace[];
+}
+
+export interface DiceConfig {
+  dice: CustomDie[];
+}
+
+export interface DicePoolTemplate {
+  id: string;
+  name: string;
+  sort: number;
+  type: 'dicePool';
+  dieIds: string[];  // ordered list of die IDs, can repeat
+}
+
+export interface RolledDieInstance {
+  instanceId: string;
+  dieId: string;
+  faceIndex: number;
+  isRerolled?: boolean;
+  rerolledByInstanceId?: string;
+  rerolledFromInstanceId?: string;
 }
 
 // History Entry
@@ -118,6 +158,10 @@ export interface HistoryEntry {
   displayText: string;
   details: RollDetails;
   isSuper?: boolean; // true if super condition was met
+  // Dice pool fields (kind defaults to 'roll' when absent)
+  kind?: 'roll' | 'dicePool';
+  diceInstances?: RolledDieInstance[];
+  diceSnapshot?: CustomDie[];
 }
 
 export interface ResultGroup {
@@ -208,13 +252,21 @@ export type ClientMessage =
   | {
       type: 'reorderUnified';
       sheetId: string;
-      items: { kind: 'attribute' | 'rollTemplate' | 'resource' | 'heading' | 'textBlock'; id: string }[];
+      items: { kind: 'attribute' | 'rollTemplate' | 'resource' | 'heading' | 'textBlock' | 'dicePool'; id: string }[];
       sheetVersion: number;
     }
+  | { type: 'createDicePoolTemplate'; sheetId: string; template: Omit<DicePoolTemplate, 'id' | 'sort'>; sheetVersion: number }
+  | { type: 'updateDicePoolTemplate'; sheetId: string; template: DicePoolTemplate; sheetVersion: number }
+  | { type: 'deleteDicePoolTemplate'; sheetId: string; templateId: string; sheetVersion: number }
+  | { type: 'reorderDicePoolTemplates'; sheetId: string; templateIds: string[]; sheetVersion: number }
   | { type: 'getHistory' }
   | { type: 'clearHistory' }
   | { type: 'roll'; sheetId: string; templateId: string; formulaIndex?: number }
-  | { type: 'adhocRoll'; sheetId: string; message: string };
+  | { type: 'adhocRoll'; sheetId: string; message: string }
+  | { type: 'getDiceConfig' }
+  | { type: 'updateDiceConfig'; config: DiceConfig }
+  | { type: 'rollPool'; dieIds: string[]; sheetId?: string }
+  | { type: 'rerollPoolDie'; historyEntryId: string; instanceId: string };
 
 export type ServerMessage =
   | { type: 'sheetList'; sheets: { id: string; name: string; initials?: string }[] }
@@ -226,5 +278,7 @@ export type ServerMessage =
   | { type: 'reject'; sheetId: string; sheetVersion: number; reason: string }
   | { type: 'history'; entries: HistoryEntry[] }
   | { type: 'historyEntry'; entry: HistoryEntry }
+  | { type: 'historyEntryUpdated'; entry: HistoryEntry }
   | { type: 'historyCleared' }
+  | { type: 'diceConfig'; config: DiceConfig }
   | { type: 'error'; message: string };

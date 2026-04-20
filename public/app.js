@@ -13,6 +13,7 @@
   let editingTemplateId = null;
   let editingResourceId = null;
   let editingTextBlockId = null;
+  let editingDicePoolTemplateId = null;
   let dragState = null;
   let collapsedHeadings = new Set(); // Track collapsed headings locally
   let expandedTextBlocks = new Set(); // Track expanded collapsible text blocks locally
@@ -21,11 +22,26 @@
   let readOnlySheets = new Set(); // Track which sheets are in read-only mode (client-side only)
   let isRenaming = false;
 
+  // View system
+  let currentView = 'sheet'; // 'sheet' | 'dicePooler'
+
+  // Dice Pooler state
+  let diceConfig = { dice: [] };
+  let diceConfigDraft = null; // local draft when configurator is open
+  let pool = []; // [{ dieId, instanceId }] client-side pool
+  let renderedPoolIds = new Set();
+  let isPoolerEditMode = false;
+  let selectedConfiguratorDieId = null;
+  const PARTICLE_SHAPES = ['star1.svg', 'star2.svg', 'star3.svg', 'leaf1.svg', 'leaf2.svg', 'confetti1.svg', 'confetti2.svg'];
+  const DICE_SHAPES = ['d4.svg', 'd6.svg', 'd8.svg', 'd10.svg', 'd12.svg', 'd20.svg', 'circle.svg'];
+  const particleImageCache = {}; // filename -> HTMLImageElement
+
   // DOM Elements
   const elements = {
     sheetIcons: document.getElementById('sheet-icons'),
     addSheetBtn: document.getElementById('add-sheet-btn'),
-    characterSheet: document.querySelector('.character-sheet'),
+    poolerNavBtn: document.getElementById('pooler-nav-btn'),
+    viewPanel: document.querySelector('.view-panel'),
     sheetTitleRow: document.querySelector('.sheet-title-row'),
     sheetName: document.getElementById('sheet-name'),
     renameBtn: document.getElementById('rename-btn'),
@@ -78,6 +94,8 @@
     resourceHeadingEdit: document.getElementById('resource-heading-edit-template'),
     textBlockView: document.getElementById('text-block-view-template'),
     textBlockEdit: document.getElementById('text-block-edit-template'),
+    dicePoolTemplateView: document.getElementById('dice-pool-template-view-template'),
+    dicePoolTemplateEdit: document.getElementById('dice-pool-template-edit-template'),
   };
 
   // ============================================================
@@ -94,6 +112,7 @@
       console.log('Connected to server');
       send({ type: 'getSheets' });
       send({ type: 'getHistory' });
+      send({ type: 'getDiceConfig' });
     };
 
     ws.onmessage = (event) => {
@@ -181,6 +200,7 @@
           const wasEditingHeading = editingHeadingId;
           const wasEditingTemplate = editingTemplateId;
           const wasEditingResource = editingResourceId;
+          const wasEditingDpt = editingDicePoolTemplateId;
           currentSheet = message.sheet;
           handlePendingInsert();
           renderSheet();
@@ -208,6 +228,12 @@
               enterResourceEditMode(wasEditingResource);
             }
           }
+          if (wasEditingDpt) {
+            const dpt = (currentSheet.dicePoolTemplates || []).find(t => t.id === wasEditingDpt);
+            if (dpt) {
+              enterDicePoolTemplateEditMode(wasEditingDpt);
+            }
+          }
         }
         const sheetInList = sheets.find(s => s.id === message.sheet.id);
         if (sheetInList) {
@@ -225,8 +251,19 @@
         addHistoryEntry(message.entry);
         break;
 
+      case 'historyEntryUpdated':
+        updateHistoryEntryInDom(message.entry);
+        break;
+
       case 'historyCleared':
         elements.historyList.innerHTML = '<div class="empty-state">No rolls yet</div>';
+        break;
+
+      case 'diceConfig':
+        diceConfig = message.config;
+        renderPoolerSelector();
+        renderConfiguratorDieList();
+        updatePoolSaveSheetSelect();
         break;
 
       case 'reject':
@@ -250,14 +287,16 @@
     elements.sheetIcons.innerHTML = '';
     sheets.forEach(sheet => {
       const btn = document.createElement('button');
-      btn.className = 'sheet-icon' + (sheet.id === currentSheetId ? ' active' : '');
+      // Sheet icon is active when it's the current sheet AND we're in sheet view
+      const isActive = sheet.id === currentSheetId && currentView === 'sheet';
+      btn.className = 'sheet-icon' + (isActive ? ' active' : '');
       btn.dataset.sheetId = sheet.id;
       btn.title = sheet.name;
-      // Use custom initials if set, otherwise compute from name
       btn.textContent = sheet.initials || getInitials(sheet.name);
       btn.addEventListener('click', () => selectSheet(sheet.id));
       elements.sheetIcons.appendChild(btn);
     });
+    updatePoolSaveSheetSelect();
   }
 
   function getInitials(name) {
@@ -274,6 +313,7 @@
     editingHeadingId = null;
     editingTemplateId = null;
     editingResourceId = null;
+    editingDicePoolTemplateId = null;
     activeItem = null;
     pendingInsert = null;
     isRenaming = false;
@@ -281,14 +321,27 @@
     if (!readOnlySheets.has(sheetId)) {
       readOnlySheets.add(sheetId);
     }
+    switchView('sheet');
     send({ type: 'getSheet', sheetId });
     renderSheetIcons();
     applyReadOnlyMode();
   }
 
+  function switchView(view) {
+    currentView = view;
+    const sheetView = document.getElementById('view-sheet');
+    const poolerView = document.getElementById('view-dice-pooler');
+    if (sheetView) sheetView.hidden = (view !== 'sheet');
+    if (poolerView) poolerView.hidden = (view !== 'dicePooler');
+    if (elements.poolerNavBtn) {
+      elements.poolerNavBtn.classList.toggle('active', view === 'dicePooler');
+    }
+    renderSheetIcons();
+  }
+
   function applyReadOnlyMode() {
     const isReadOnly = currentSheetId && readOnlySheets.has(currentSheetId);
-    elements.characterSheet.classList.toggle('read-only', isReadOnly);
+    elements.viewPanel.classList.toggle('read-only', isReadOnly);
     // Lock icons are toggled via CSS based on .read-only class
     // Update resizer appearance
     updateResizerReadOnly();
@@ -307,6 +360,7 @@
       if (editingTemplateId) exitTemplateEditMode();
       if (editingTextBlockId) exitTextBlockEditMode();
       if (editingResourceId) exitResourceEditMode();
+      if (editingDicePoolTemplateId) exitDicePoolTemplateEditMode();
       if (isRenaming) cancelRename();
     }
     applyReadOnlyMode();
@@ -353,7 +407,7 @@
     const sheetPercent = ratio * 100;
     const historyPercent = (1 - ratio) * 100;
 
-    elements.characterSheet.style.flex = `1 1 ${sheetPercent}%`;
+    elements.viewPanel.style.flex = `1 1 ${sheetPercent}%`;
     document.querySelector('.history-panel').style.flex = `1 1 ${historyPercent}%`;
   }
 
@@ -382,11 +436,11 @@
       const orientation = getOrientation();
       if (orientation === 'landscape') {
         startPos = e.clientX;
-        startSheetSize = elements.characterSheet.offsetWidth;
+        startSheetSize = elements.viewPanel.offsetWidth;
         startHistorySize = document.querySelector('.history-panel').offsetWidth;
       } else {
         startPos = e.clientY;
-        startSheetSize = elements.characterSheet.offsetHeight;
+        startSheetSize = elements.viewPanel.offsetHeight;
         startHistorySize = document.querySelector('.history-panel').offsetHeight;
       }
 
@@ -425,7 +479,7 @@
 
       // Calculate ratio and apply
       const ratio = newSheetSize / totalSize;
-      elements.characterSheet.style.flex = `1 1 ${ratio * 100}%`;
+      elements.viewPanel.style.flex = `1 1 ${ratio * 100}%`;
       historyPanel.style.flex = `1 1 ${(1 - ratio) * 100}%`;
     };
 
@@ -446,10 +500,10 @@
       let totalSize, sheetSize;
 
       if (orientation === 'landscape') {
-        sheetSize = elements.characterSheet.offsetWidth;
+        sheetSize = elements.viewPanel.offsetWidth;
         totalSize = sheetSize + historyPanel.offsetWidth;
       } else {
-        sheetSize = elements.characterSheet.offsetHeight;
+        sheetSize = elements.viewPanel.offsetHeight;
         totalSize = sheetSize + historyPanel.offsetHeight;
       }
 
@@ -713,6 +767,8 @@
         el = createResourceElement(entry.item, currentHeadingId);
       } else if (entry.kind === 'textBlock') {
         el = createTextBlockElement(entry.item, currentHeadingId);
+      } else if (entry.kind === 'dicePool') {
+        el = createDicePoolTemplateElement(entry.item, currentHeadingId);
       }
 
       if (el) {
@@ -732,6 +788,7 @@
     if (kind === 'resource') return currentSheet.resources || [];
     if (kind === 'heading') return currentSheet.headings || [];
     if (kind === 'textBlock') return currentSheet.textBlocks || [];
+    if (kind === 'dicePool') return currentSheet.dicePoolTemplates || [];
     return [];
   }
 
@@ -796,6 +853,8 @@
       sendSheetAction({ type: 'reorderHeadings', sheetId: currentSheetId, headingIds: orderedIds });
     } else if (kind === 'textBlock') {
       sendSheetAction({ type: 'reorderTextBlocks', sheetId: currentSheetId, textBlockIds: orderedIds });
+    } else if (kind === 'dicePool') {
+      sendSheetAction({ type: 'reorderDicePoolTemplates', sheetId: currentSheetId, templateIds: orderedIds });
     }
   }
 
@@ -3016,6 +3075,10 @@
   }
 
   function createHistoryElement(entry, isNew = false) {
+    if (entry.kind === 'dicePool') {
+      return createDicePoolHistoryElement(entry, isNew);
+    }
+
     const el = document.createElement('div');
     el.className = 'history-item';
 
@@ -3157,6 +3220,17 @@
   // ============================================================
 
   function setupEventListeners() {
+    if (elements.poolerNavBtn) {
+      elements.poolerNavBtn.addEventListener('click', () => {
+        if (currentView === 'dicePooler') {
+          // Toggle back to sheet view if a sheet is selected
+          if (currentSheetId) switchView('sheet');
+        } else {
+          switchView('dicePooler');
+        }
+      });
+    }
+
     elements.addSheetBtn.addEventListener('click', createSheet);
     elements.exportSheetBtn.addEventListener('click', exportSheet);
     elements.copySheetBtn.addEventListener('click', copySheet);
@@ -3250,6 +3324,47 @@
       elements.addTextBlockBtn.addEventListener('click', addTextBlock);
     }
 
+    const addDptBtn = document.getElementById('add-dice-pool-template-btn');
+    if (addDptBtn) {
+      addDptBtn.addEventListener('click', addDicePoolTemplate);
+    }
+
+    // Dice Pooler
+    const poolerEditBtn = document.getElementById('pooler-edit-btn');
+    if (poolerEditBtn) {
+      poolerEditBtn.addEventListener('click', togglePoolerEditMode);
+    }
+
+    const poolRollBtn = document.getElementById('pool-roll-btn');
+    if (poolRollBtn) {
+      poolRollBtn.addEventListener('click', rollPool);
+    }
+
+    const poolClearBtn = document.getElementById('pool-clear-btn');
+    if (poolClearBtn) {
+      poolClearBtn.addEventListener('click', clearPool);
+    }
+
+    const poolSaveBtn = document.getElementById('pool-save-btn');
+    if (poolSaveBtn) {
+      poolSaveBtn.addEventListener('click', savePoolAsTemplate);
+    }
+
+    const configuratorAddDieBtn = document.getElementById('configurator-add-die-btn');
+    if (configuratorAddDieBtn) {
+      configuratorAddDieBtn.addEventListener('click', addDieToConfig);
+    }
+
+    const configuratorSaveBtn = document.getElementById('configurator-save-btn');
+    if (configuratorSaveBtn) {
+      configuratorSaveBtn.addEventListener('click', saveConfigurator);
+    }
+
+    const configuratorCancelBtn = document.getElementById('configurator-cancel-btn');
+    if (configuratorCancelBtn) {
+      configuratorCancelBtn.addEventListener('click', cancelConfigurator);
+    }
+
     elements.deleteModal.addEventListener('click', (e) => {
       if (e.target === elements.deleteModal) {
         cancelDeleteSheet();
@@ -3268,6 +3383,841 @@
   }
 
   // ============================================================
+  // Dice Pool Template (sheet item)
+  // ============================================================
+
+  function createDicePoolTemplateElement(dpt, headingId) {
+    const isEditing = editingDicePoolTemplateId === dpt.id;
+    const tmpl = isEditing ? templates.dicePoolTemplateEdit : templates.dicePoolTemplateView;
+    if (!tmpl) return null;
+    const clone = tmpl.content.cloneNode(true);
+    const el = clone.querySelector('.dice-pool-template-item');
+    if (!el) return null;
+
+    el.dataset.dptId = dpt.id;
+    el.dataset.kind = 'dicePool';
+    el.dataset.itemId = dpt.id;
+    el.classList.add('sheet-item');
+
+    if (headingId) {
+      el.classList.add('indented');
+      el.dataset.headingId = headingId;
+      if (collapsedHeadings.has(headingId)) el.classList.add('collapsed');
+    }
+
+    if (isEditing) {
+      setupDicePoolTemplateEditMode(el, dpt);
+    } else {
+      setupDicePoolTemplateViewMode(el, dpt);
+    }
+
+    if (!isEditing) {
+      setupUnifiedDragAndDrop(el, 'dicePool', dpt.id);
+    }
+
+    return el;
+  }
+
+  function renderDptDicePreview(container, dpt) {
+    container.innerHTML = '';
+    (dpt.dieIds || []).slice(0, 8).forEach(dieId => {
+      const die = diceConfig.dice.find(d => d.id === dieId);
+      if (!die) return;
+      const btn = createDieButton(die, null);
+      btn.style.cursor = 'default';
+      btn.style.pointerEvents = 'none';
+      container.appendChild(btn);
+    });
+    if ((dpt.dieIds || []).length > 8) {
+      const more = document.createElement('span');
+      more.style.cssText = 'font-size:0.75rem;color:#888;align-self:center';
+      more.textContent = `+${dpt.dieIds.length - 8}`;
+      container.appendChild(more);
+    }
+  }
+
+  function setupDicePoolTemplateViewMode(el, dpt) {
+    const nameEl = el.querySelector('.dpt-name');
+    if (nameEl) nameEl.textContent = dpt.name || 'Dice Pool';
+
+    const preview = el.querySelector('.dpt-dice-preview');
+    if (preview) renderDptDicePreview(preview, dpt);
+
+    const rollBtn = el.querySelector('.dpt-roll-btn');
+    if (rollBtn) {
+      rollBtn.addEventListener('click', () => {
+        if (!currentSheetId) return;
+        send({ type: 'rollPool', dieIds: dpt.dieIds, sheetId: currentSheetId });
+      });
+    }
+
+    const loadBtn = el.querySelector('.dpt-load-btn');
+    if (loadBtn) {
+      loadBtn.addEventListener('click', () => {
+        pool = (dpt.dieIds || []).map(dieId => ({ dieId, instanceId: generateClientId() }));
+        switchView('dicePooler');
+        renderPool();
+      });
+    }
+
+    const editBtn = el.querySelector('.edit-btn');
+    if (editBtn) editBtn.addEventListener('click', () => enterDicePoolTemplateEditMode(dpt.id));
+  }
+
+  function setupDicePoolTemplateEditMode(el, dpt) {
+    const nameInput = el.querySelector('.edit-dpt-name');
+    if (nameInput) nameInput.value = dpt.name || '';
+
+    const preview = el.querySelector('.dpt-dice-preview');
+    if (preview) renderDptDicePreview(preview, dpt);
+
+    const saveBtn = el.querySelector('.save-btn');
+    const cancelBtn = el.querySelector('.cancel-btn');
+    const copyBtn = el.querySelector('.copy-btn');
+    const deleteBtn = el.querySelector('.delete-btn');
+
+    if (nameInput) {
+      nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); saveDicePoolTemplate(dpt.id, nameInput.value); }
+        if (e.key === 'Escape') { e.preventDefault(); exitDicePoolTemplateEditMode(); }
+      });
+    }
+
+    if (saveBtn) saveBtn.addEventListener('click', () => saveDicePoolTemplate(dpt.id, nameInput ? nameInput.value : dpt.name));
+    if (cancelBtn) cancelBtn.addEventListener('click', () => exitDicePoolTemplateEditMode());
+    if (copyBtn) copyBtn.addEventListener('click', () => duplicateDicePoolTemplate(dpt.id));
+    if (deleteBtn) deleteBtn.addEventListener('click', () => deleteDicePoolTemplate(dpt.id));
+
+    setTimeout(() => nameInput && nameInput.focus(), 0);
+  }
+
+  function enterDicePoolTemplateEditMode(id) {
+    editingDicePoolTemplateId = id;
+    renderUnifiedList();
+  }
+
+  function exitDicePoolTemplateEditMode() {
+    editingDicePoolTemplateId = null;
+    renderUnifiedList();
+  }
+
+  function saveDicePoolTemplate(id, name) {
+    if (!name || !name.trim()) { alert('Name is required'); return; }
+    const dpt = (currentSheet.dicePoolTemplates || []).find(t => t.id === id);
+    if (!dpt) return;
+    sendSheetAction({ type: 'updateDicePoolTemplate', sheetId: currentSheetId, template: { ...dpt, name: name.trim() } });
+    exitDicePoolTemplateEditMode();
+  }
+
+  function deleteDicePoolTemplate(id) {
+    if (confirm('Delete this dice pool template?')) {
+      sendSheetAction({ type: 'deleteDicePoolTemplate', sheetId: currentSheetId, templateId: id });
+      exitDicePoolTemplateEditMode();
+    }
+  }
+
+  function duplicateDicePoolTemplate(id) {
+    const dpt = (currentSheet.dicePoolTemplates || []).find(t => t.id === id);
+    if (!dpt) return;
+    exitDicePoolTemplateEditMode();
+    queueInsert('dicePool', id);
+    sendSheetAction({ type: 'createDicePoolTemplate', sheetId: currentSheetId, template: { type: 'dicePool', name: dpt.name + ' (Copy)', dieIds: [...dpt.dieIds] } });
+  }
+
+  function addDicePoolTemplate() {
+    if (!currentSheetId || pool.length === 0) {
+      alert('Add dice to the pool in the Dice Pooler first, then save as a template from there, or use the + Dice Pool button with an existing pool.');
+      return;
+    }
+    const dieIds = pool.map(p => p.dieId);
+    sendSheetAction({ type: 'createDicePoolTemplate', sheetId: currentSheetId, template: { type: 'dicePool', name: 'Dice Pool', dieIds } });
+  }
+
+  // ============================================================
+  // Dice Pooler View
+  // ============================================================
+
+  function generateClientId() {
+    return Math.random().toString(36).substr(2, 9);
+  }
+
+  function createDieButton(die, faceIndex, onClick) {
+    const btn = document.createElement('button');
+    btn.className = 'die-btn';
+    btn.type = 'button';
+
+    const face = (faceIndex !== null && faceIndex !== undefined && die.faces[faceIndex]) ? die.faces[faceIndex] : (die.faces[0] || null);
+    const bgColor = face ? face.color : '#6d28d9';
+    const fontColor = face ? face.fontColor : '#ffffff';
+    const kurzel = (faceIndex !== null && faceIndex !== undefined && face) ? face.kurzel : die.selectorKurzel;
+
+    btn.style.setProperty('--die-bg', bgColor);
+    btn.style.setProperty('--die-fg', fontColor);
+
+    const img = document.createElement('img');
+    img.src = '/svg/dice/' + die.backgroundShape;
+    img.className = 'die-shape';
+    img.alt = '';
+
+    const span = document.createElement('span');
+    span.className = 'die-kurzel';
+    span.textContent = kurzel || '?';
+
+    btn.appendChild(img);
+    btn.appendChild(span);
+
+    if (onClick) btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  function renderPoolerSelector() {
+    const container = document.getElementById('pooler-selector');
+    if (!container) return;
+    container.innerHTML = '';
+    const config = isPoolerEditMode ? (diceConfigDraft || diceConfig) : diceConfig;
+    if (config.dice.length === 0) {
+      container.innerHTML = '<div class="empty-state">No dice configured</div>';
+      return;
+    }
+    config.dice.forEach(die => {
+      const btn = createDieButton(die, null, () => addToPool(die.id));
+      container.appendChild(btn);
+    });
+  }
+
+  function addToPool(dieId) {
+    pool.push({ dieId, instanceId: generateClientId() });
+    renderPool();
+  }
+
+  function removeFromPool(instanceId, btn) {
+    if (btn) {
+      btn.style.setProperty('--die-bg', '#ef4444');
+      btn.classList.add('die-removing');
+      btn.addEventListener('animationend', () => {
+        const idx = pool.findIndex(p => p.instanceId === instanceId);
+        if (idx !== -1) {
+          pool.splice(idx, 1);
+          renderPool();
+        }
+      }, { once: true });
+    } else {
+      const idx = pool.findIndex(p => p.instanceId === instanceId);
+      if (idx !== -1) {
+        pool.splice(idx, 1);
+        renderPool();
+      }
+    }
+  }
+
+  function clearPool() {
+    pool = [];
+    renderedPoolIds.clear();
+    renderPool();
+  }
+
+  function renderPool() {
+    const container = document.getElementById('pooler-pool');
+    if (!container) return;
+    container.innerHTML = '';
+    if (pool.length === 0) {
+      renderedPoolIds.clear();
+      container.innerHTML = '<div class="empty-state">Click dice above to add them</div>';
+      return;
+    }
+    const nextRenderedIds = new Set();
+    pool.forEach(({ dieId, instanceId }) => {
+      const die = diceConfig.dice.find(d => d.id === dieId);
+      if (!die) return;
+      const btn = createDieButton(die, null, () => removeFromPool(instanceId, btn));
+      btn.title = 'Click to remove';
+      if (!renderedPoolIds.has(instanceId)) {
+        btn.classList.add('die-entering');
+      }
+      nextRenderedIds.add(instanceId);
+      container.appendChild(btn);
+    });
+    renderedPoolIds = nextRenderedIds;
+  }
+
+  function rollPool() {
+    if (pool.length === 0) { alert('Add some dice to the pool first'); return; }
+    const dieIds = pool.map(p => p.dieId);
+    send({ type: 'rollPool', dieIds, sheetId: currentSheetId || undefined });
+  }
+
+  function savePoolAsTemplate() {
+    if (pool.length === 0) { alert('Add dice to the pool first'); return; }
+    const select = document.getElementById('pool-save-sheet-select');
+    const sheetId = select ? select.value : (currentSheetId || '');
+    const sheet = sheets.find(s => s.id === sheetId);
+    if (!sheet) { alert('Please select a sheet to save to'); return; }
+
+    // We need the sheet version; if it's the current sheet we have it
+    const targetSheet = sheetId === currentSheetId ? currentSheet : null;
+    if (!targetSheet) {
+      // Need to fetch the sheet first - for simplicity require selecting current sheet
+      alert('Please select the currently loaded sheet to save a template');
+      return;
+    }
+
+    const name = prompt('Template name:', 'Dice Pool') || 'Dice Pool';
+    const dieIds = pool.map(p => p.dieId);
+    sendSheetAction({ type: 'createDicePoolTemplate', sheetId, template: { type: 'dicePool', name, dieIds } });
+  }
+
+  function updatePoolSaveSheetSelect() {
+    const select = document.getElementById('pool-save-sheet-select');
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = '';
+    sheets.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      if (s.id === (current || currentSheetId)) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
+  // ============================================================
+  // Dice Configurator
+  // ============================================================
+
+  function togglePoolerEditMode() {
+    isPoolerEditMode = !isPoolerEditMode;
+    const configurator = document.getElementById('pooler-configurator');
+    const poolerView = document.getElementById('view-dice-pooler');
+
+    if (isPoolerEditMode) {
+      diceConfigDraft = JSON.parse(JSON.stringify(diceConfig));
+      selectedConfiguratorDieId = null;
+      if (configurator) configurator.hidden = false;
+      if (poolerView) poolerView.classList.add('editing');
+      renderConfiguratorDieList();
+      renderConfiguratorDieDetail();
+    } else {
+      diceConfigDraft = null;
+      selectedConfiguratorDieId = null;
+      if (configurator) configurator.hidden = true;
+      if (poolerView) poolerView.classList.remove('editing');
+      renderPoolerSelector();
+    }
+  }
+
+  function renderConfiguratorDieList() {
+    const container = document.getElementById('configurator-die-list');
+    if (!container) return;
+    container.innerHTML = '';
+    const config = diceConfigDraft || diceConfig;
+    config.dice.forEach(die => {
+      const btn = createDieButton(die, null, () => {
+        selectedConfiguratorDieId = die.id;
+        renderConfiguratorDieList();
+        renderConfiguratorDieDetail();
+      });
+      if (die.id === selectedConfiguratorDieId) btn.classList.add('selected');
+      container.appendChild(btn);
+    });
+  }
+
+  function renderConfiguratorDieDetail() {
+    const container = document.getElementById('configurator-die-detail');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const config = diceConfigDraft || diceConfig;
+    const die = config.dice.find(d => d.id === selectedConfiguratorDieId);
+    if (!die) {
+      container.innerHTML = '<div class="configurator-empty-state">Select a die to configure</div>';
+      return;
+    }
+
+    // Selector kurzel field
+    const kurzelRow = createConfiguratorFieldRow('Label', 'text', die.selectorKurzel, val => {
+      die.selectorKurzel = val;
+      renderConfiguratorDieList();
+    });
+    container.appendChild(kurzelRow);
+
+    // Background shape dropdown
+    const shapeRow = document.createElement('div');
+    shapeRow.className = 'configurator-field-row';
+    const shapeLabel = document.createElement('label');
+    shapeLabel.textContent = 'Shape';
+    const shapeSelect = document.createElement('select');
+    DICE_SHAPES.forEach(shape => {
+      const opt = document.createElement('option');
+      opt.value = shape;
+      opt.textContent = shape.replace('.svg', '');
+      if (shape === die.backgroundShape) opt.selected = true;
+      shapeSelect.appendChild(opt);
+    });
+    shapeSelect.addEventListener('change', () => {
+      die.backgroundShape = shapeSelect.value;
+      renderConfiguratorDieList();
+    });
+    shapeRow.appendChild(shapeLabel);
+    shapeRow.appendChild(shapeSelect);
+    container.appendChild(shapeRow);
+
+    // Faces label
+    const facesLabel = document.createElement('div');
+    facesLabel.className = 'configurator-faces-label';
+    facesLabel.textContent = 'Faces';
+    container.appendChild(facesLabel);
+
+    // Faces list
+    const facesList = document.createElement('div');
+    facesList.className = 'configurator-faces-list';
+
+    const renderFaces = () => {
+      facesList.innerHTML = '';
+      die.faces.forEach((face, idx) => {
+        const row = document.createElement('div');
+        row.className = 'configurator-face-row';
+
+        const numSpan = document.createElement('span');
+        numSpan.className = 'face-num';
+        numSpan.textContent = idx + 1;
+
+        const bgColor = document.createElement('input');
+        bgColor.type = 'color';
+        bgColor.value = face.color || '#6d28d9';
+        bgColor.title = 'Background color';
+        bgColor.addEventListener('input', () => { face.color = bgColor.value; });
+
+        const fgColor = document.createElement('input');
+        fgColor.type = 'color';
+        fgColor.value = face.fontColor || '#ffffff';
+        fgColor.title = 'Text color';
+        fgColor.addEventListener('input', () => { face.fontColor = fgColor.value; });
+
+        const kurzelInput = document.createElement('input');
+        kurzelInput.type = 'text';
+        kurzelInput.className = 'edit-input';
+        kurzelInput.value = face.kurzel || '';
+        kurzelInput.maxLength = 2;
+        kurzelInput.placeholder = '?';
+        kurzelInput.title = 'Result label';
+        kurzelInput.addEventListener('input', () => { face.kurzel = kurzelInput.value; });
+
+        const superShapeSelect = document.createElement('select');
+        const noneOpt = document.createElement('option');
+        noneOpt.value = '';
+        noneOpt.textContent = '—';
+        superShapeSelect.appendChild(noneOpt);
+        PARTICLE_SHAPES.forEach(shape => {
+          const opt = document.createElement('option');
+          opt.value = shape;
+          opt.textContent = shape.replace('.svg', '');
+          if (shape === face.superShape) opt.selected = true;
+          superShapeSelect.appendChild(opt);
+        });
+        superShapeSelect.title = 'Super particle shape';
+        superShapeSelect.addEventListener('change', () => {
+          face.superShape = superShapeSelect.value || undefined;
+        });
+
+        const superColor = document.createElement('input');
+        superColor.type = 'color';
+        superColor.value = face.superColor || '#fbbf24';
+        superColor.title = 'Super particle color';
+        superColor.addEventListener('input', () => { face.superColor = superColor.value; });
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.type = 'button';
+        deleteBtn.title = 'Remove face';
+        deleteBtn.innerHTML = '&times;';
+        deleteBtn.addEventListener('click', () => {
+          if (die.faces.length > 1) {
+            die.faces.splice(idx, 1);
+            renderFaces();
+          }
+        });
+
+        row.appendChild(numSpan);
+        row.appendChild(bgColor);
+        row.appendChild(fgColor);
+        row.appendChild(kurzelInput);
+        row.appendChild(superShapeSelect);
+        row.appendChild(superColor);
+        row.appendChild(deleteBtn);
+        facesList.appendChild(row);
+      });
+    };
+
+    renderFaces();
+    container.appendChild(facesList);
+
+    const addFaceBtn = document.createElement('button');
+    addFaceBtn.className = 'add-btn configurator-add-face-btn';
+    addFaceBtn.type = 'button';
+    addFaceBtn.textContent = '+ Add Face';
+    addFaceBtn.addEventListener('click', () => {
+      const prev = die.faces[die.faces.length - 1];
+      let newKurzel = '?';
+      if (prev && prev.kurzel) {
+        const n = parseInt(prev.kurzel, 10);
+        if (!isNaN(n)) {
+          newKurzel = String(n + 1);
+        } else if (prev.kurzel.length === 1) {
+          newKurzel = String.fromCharCode(prev.kurzel.charCodeAt(0) + 1);
+        }
+      }
+      die.faces.push({
+        kurzel: newKurzel,
+        color: prev ? prev.color : '#6d28d9',
+        fontColor: prev ? prev.fontColor : '#ffffff',
+      });
+      renderFaces();
+    });
+    container.appendChild(addFaceBtn);
+
+    // Per-die action buttons (duplicate, delete)
+    const dieActions = document.createElement('div');
+    dieActions.className = 'configurator-die-actions';
+
+    const dupBtn = document.createElement('button');
+    dupBtn.className = 'secondary-btn';
+    dupBtn.textContent = 'Duplicate Die';
+    dupBtn.addEventListener('click', () => {
+      const newDie = JSON.parse(JSON.stringify(die));
+      newDie.id = generateClientId();
+      newDie.selectorKurzel = die.selectorKurzel + '\'';
+      diceConfigDraft.dice.push(newDie);
+      selectedConfiguratorDieId = newDie.id;
+      renderConfiguratorDieList();
+      renderConfiguratorDieDetail();
+    });
+
+    const trashBtn = document.createElement('button');
+    trashBtn.className = 'danger-btn';
+    trashBtn.textContent = 'Delete Die';
+    trashBtn.addEventListener('click', () => {
+      if (diceConfigDraft.dice.length <= 1) { alert('Cannot delete the last die'); return; }
+      if (confirm('Delete this die?')) {
+        const idx = diceConfigDraft.dice.findIndex(d => d.id === selectedConfiguratorDieId);
+        if (idx !== -1) diceConfigDraft.dice.splice(idx, 1);
+        selectedConfiguratorDieId = diceConfigDraft.dice[0] ? diceConfigDraft.dice[0].id : null;
+        renderConfiguratorDieList();
+        renderConfiguratorDieDetail();
+      }
+    });
+
+    dieActions.appendChild(dupBtn);
+    dieActions.appendChild(trashBtn);
+    container.appendChild(dieActions);
+  }
+
+  function createConfiguratorFieldRow(labelText, inputType, value, onChange) {
+    const row = document.createElement('div');
+    row.className = 'configurator-field-row';
+    const label = document.createElement('label');
+    label.textContent = labelText;
+    const input = document.createElement('input');
+    input.type = inputType;
+    input.className = 'edit-input';
+    input.value = value;
+    input.addEventListener('input', () => onChange(input.value));
+    row.appendChild(label);
+    row.appendChild(input);
+    return row;
+  }
+
+  function addDieToConfig() {
+    if (!diceConfigDraft) return;
+    const newDie = {
+      id: generateClientId(),
+      selectorKurzel: 'dx',
+      backgroundShape: 'd6.svg',
+      faces: [
+        { kurzel: '1', color: '#6d28d9', fontColor: '#ffffff' },
+        { kurzel: '2', color: '#6d28d9', fontColor: '#ffffff' },
+      ],
+    };
+    diceConfigDraft.dice.push(newDie);
+    selectedConfiguratorDieId = newDie.id;
+    renderConfiguratorDieList();
+    renderConfiguratorDieDetail();
+  }
+
+  function saveConfigurator() {
+    if (!diceConfigDraft) return;
+    send({ type: 'updateDiceConfig', config: diceConfigDraft });
+    isPoolerEditMode = false;
+    diceConfigDraft = null;
+    selectedConfiguratorDieId = null;
+    const configurator = document.getElementById('pooler-configurator');
+    const poolerView = document.getElementById('view-dice-pooler');
+    if (configurator) configurator.hidden = true;
+    if (poolerView) poolerView.classList.remove('editing');
+  }
+
+  function cancelConfigurator() {
+    isPoolerEditMode = false;
+    diceConfigDraft = null;
+    selectedConfiguratorDieId = null;
+    const configurator = document.getElementById('pooler-configurator');
+    const poolerView = document.getElementById('view-dice-pooler');
+    if (configurator) configurator.hidden = true;
+    if (poolerView) poolerView.classList.remove('editing');
+    renderPoolerSelector();
+  }
+
+  // ============================================================
+  // Dice Pool History
+  // ============================================================
+
+  function updateHistoryEntryInDom(entry) {
+    const existing = elements.historyList.querySelector(`[data-entry-id="${entry.id}"]`);
+    if (!existing) return;
+    const updated = createHistoryElement(entry, false);
+    elements.historyList.replaceChild(updated, existing);
+  }
+
+  function createDicePoolHistoryElement(entry, isNew) {
+    const el = document.createElement('div');
+    el.className = 'history-item';
+    el.dataset.entryId = entry.id;
+
+    const instances = entry.diceInstances || [];
+    const snapshot = entry.diceSnapshot || [];
+
+    // Determine if any non-rerolled die has a super face
+    const superInstances = instances.filter(inst => {
+      if (inst.isRerolled) return false;
+      const die = snapshot.find(d => d.id === inst.dieId);
+      if (!die) return false;
+      const face = die.faces[inst.faceIndex];
+      return face && face.superShape && face.superColor;
+    });
+
+    const isSuper = superInstances.length > 0;
+
+    if (isSuper && !isNew) {
+      el.classList.add('history-super');
+    }
+
+    // Gather super gradient colors for background
+    let superGradient = '';
+    if (isSuper) {
+      const colors = [...new Set(superInstances.map(inst => {
+        const die = snapshot.find(d => d.id === inst.dieId);
+        const face = die && die.faces[inst.faceIndex];
+        return face ? face.superColor : null;
+      }).filter(Boolean))];
+      if (colors.length === 1) {
+        superGradient = colors[0];
+      } else if (colors.length > 1) {
+        superGradient = `linear-gradient(135deg, ${colors.join(', ')})`;
+      }
+    }
+
+    // Build collapsed dice display (non-rerolled only)
+    const visibleInstances = instances.filter(inst => !inst.isRerolled);
+
+    const header = document.createElement('div');
+    header.className = 'history-header';
+
+    const diceDisplay = document.createElement('div');
+    diceDisplay.className = 'history-pool-dice';
+    if (superGradient) {
+      diceDisplay.style.background = superGradient;
+      diceDisplay.style.borderRadius = '6px';
+      diceDisplay.style.padding = '0.25rem';
+    }
+
+    visibleInstances.forEach(inst => {
+      const die = snapshot.find(d => d.id === inst.dieId);
+      if (!die) return;
+      const btn = createDieButton(die, inst.faceIndex, null);
+      btn.style.cursor = 'default';
+      btn.style.pointerEvents = 'none';
+      diceDisplay.appendChild(btn);
+    });
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'history-toggle';
+    toggleBtn.setAttribute('aria-expanded', 'false');
+    toggleBtn.innerHTML = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+
+    header.appendChild(diceDisplay);
+    header.appendChild(toggleBtn);
+    el.appendChild(header);
+
+    // Expanded details
+    const details = document.createElement('div');
+    details.className = 'history-details';
+    details.hidden = true;
+
+    // All dice including rerolled
+    const allDiceDiv = document.createElement('div');
+    allDiceDiv.className = 'history-pool-dice';
+
+    instances.forEach(inst => {
+      const die = snapshot.find(d => d.id === inst.dieId);
+      if (!die) return;
+      const btn = createDieButton(die, inst.faceIndex, null);
+      if (inst.isRerolled) {
+        btn.classList.add('rerolled');
+        btn.style.cursor = 'default';
+        btn.style.pointerEvents = 'none';
+      } else {
+        btn.title = 'Click to reroll';
+        btn.addEventListener('click', () => {
+          send({ type: 'rerollPoolDie', historyEntryId: entry.id, instanceId: inst.instanceId });
+        });
+      }
+      allDiceDiv.appendChild(btn);
+    });
+
+    details.appendChild(allDiceDiv);
+
+    // Save as template action
+    const expandedActions = document.createElement('div');
+    expandedActions.className = 'history-pool-expanded-actions';
+
+    const saveDiv = document.createElement('div');
+    saveDiv.className = 'pool-save-modal';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'secondary-btn pool-save-modal';
+    saveBtn.textContent = 'Save as Template';
+    saveBtn.style.fontSize = '0.8rem';
+    saveBtn.style.padding = '0.2rem 0.6rem';
+
+    const sheetSelect = document.createElement('select');
+    sheets.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      if (s.id === currentSheetId) opt.selected = true;
+      sheetSelect.appendChild(opt);
+    });
+
+    saveBtn.addEventListener('click', () => {
+      const targetSheetId = sheetSelect.value;
+      if (targetSheetId !== currentSheetId || !currentSheet) {
+        alert('Please switch to that sheet first to save a template to it');
+        return;
+      }
+      const name = prompt('Template name:', 'Dice Pool') || 'Dice Pool';
+      const dieIds = instances.filter(i => !i.isRerolled).map(i => i.dieId);
+      sendSheetAction({ type: 'createDicePoolTemplate', sheetId: targetSheetId, template: { type: 'dicePool', name, dieIds } });
+    });
+
+    saveDiv.appendChild(saveBtn);
+    saveDiv.appendChild(sheetSelect);
+    expandedActions.appendChild(saveDiv);
+    details.appendChild(expandedActions);
+
+    el.appendChild(details);
+
+    toggleBtn.addEventListener('click', () => {
+      const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+      toggleBtn.setAttribute('aria-expanded', String(!expanded));
+      details.hidden = expanded;
+      el.classList.toggle('expanded', !expanded);
+    });
+
+    // Trigger super effects for new entries
+    if (isNew && isSuper) {
+      setTimeout(() => {
+        el.classList.add('history-upgrade-super');
+        el.classList.add('history-super');
+        superInstances.forEach(inst => {
+          const die = snapshot.find(d => d.id === inst.dieId);
+          const face = die && die.faces[inst.faceIndex];
+          if (face && face.superShape && face.superColor) {
+            triggerPoolSuperEffect(diceDisplay, face.superShape, face.superColor);
+          }
+        });
+        setTimeout(() => el.classList.remove('history-upgrade-super'), 800);
+      }, 350);
+    }
+
+    return el;
+  }
+
+  function triggerPoolSuperEffect(targetEl, particleShape, particleColor) {
+    ensureSuperCanvas();
+    const rect = targetEl.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    createScreenFlash();
+
+    // Preload particle image
+    let img = particleImageCache[particleShape];
+    if (!img) {
+      img = new Image();
+      img.src = '/svg/particles/' + particleShape;
+      particleImageCache[particleShape] = img;
+    }
+
+    const particles = [];
+    const count = 30;
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+      const speed = 5 + Math.random() * 10;
+      particles.push({
+        x: centerX, y: centerY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 8 + Math.random() * 10,
+        life: 1,
+        decay: 0.018 + Math.random() * 0.01,
+        gravity: 0.12,
+      });
+    }
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = 32;
+    offscreen.height = 32;
+    const offCtx = offscreen.getContext('2d');
+
+    const drawParticle = (ctx, p) => {
+      offCtx.clearRect(0, 0, 32, 32);
+      if (img.complete && img.naturalWidth > 0) {
+        offCtx.drawImage(img, 0, 0, 32, 32);
+        offCtx.globalCompositeOperation = 'source-in';
+        offCtx.fillStyle = particleColor;
+        offCtx.fillRect(0, 0, 32, 32);
+        offCtx.globalCompositeOperation = 'source-over';
+      } else {
+        offCtx.fillStyle = particleColor;
+        offCtx.beginPath();
+        offCtx.arc(16, 16, 12, 0, Math.PI * 2);
+        offCtx.fill();
+      }
+      const s = p.size * p.life;
+      ctx.save();
+      ctx.globalAlpha = p.life;
+      ctx.drawImage(offscreen, p.x - s / 2, p.y - s / 2, s, s);
+      ctx.restore();
+    };
+
+    let animId;
+    const animate = () => {
+      superCtx.clearRect(0, 0, superCanvas.width, superCanvas.height);
+      let active = false;
+      particles.forEach(p => {
+        if (p.life <= 0) return;
+        active = true;
+        p.x += p.vx; p.y += p.vy;
+        p.vy += p.gravity; p.vx *= 0.98;
+        p.life -= p.decay;
+        if (p.life > 0) drawParticle(superCtx, p);
+      });
+      if (active) animId = requestAnimationFrame(animate);
+      else superCtx.clearRect(0, 0, superCanvas.width, superCanvas.height);
+    };
+    animate();
+  }
+
+  // ============================================================
   // Initialize
   // ============================================================
 
@@ -3276,6 +4226,9 @@
     setupEventListeners();
     setupResizer();
     connect();
+    // Initial view state
+    const poolerView = document.getElementById('view-dice-pooler');
+    if (poolerView) poolerView.hidden = true;
   }
 
   document.addEventListener('DOMContentLoaded', init);

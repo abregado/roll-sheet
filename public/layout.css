@@ -6,7 +6,7 @@
 
    Sections:
    - .sheet-sidebar (toolbar)
-   - .character-sheet (main content)
+   - .view-panel (main content)
    - .history-panel (roll history)
    ========================================================================== */
 
@@ -46,7 +46,7 @@
     display: none;
   }
 
-  .character-sheet {
+  .view-panel {
     flex: 1 1 50%;
     min-width: 100px;
     height: 100%;
@@ -56,7 +56,7 @@
     scrollbar-width: none;
   }
 
-  .character-sheet::-webkit-scrollbar {
+  .view-panel::-webkit-scrollbar {
     display: none;
   }
 
@@ -109,7 +109,7 @@
     display: none;
   }
 
-  .character-sheet {
+  .view-panel {
     flex: 1 1 50%;
     min-height: 100px;
     width: 100%;
@@ -119,7 +119,7 @@
     scrollbar-width: none;
   }
 
-  .character-sheet::-webkit-scrollbar {
+  .view-panel::-webkit-scrollbar {
     display: none;
   }
 
@@ -143,4 +143,76 @@
   .history-panel::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* ==========================================================================
+   SIDEBAR SECTIONS
+   - .sidebar-app-section: app-wide nav buttons (pooler, etc.)
+   - .sidebar-divider: visual separator
+   - .sidebar-sheet-section: sheet selection buttons
+   ========================================================================== */
+
+.sidebar-app-section,
+.sidebar-sheet-section {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+@media (orientation: landscape) {
+  .sidebar-app-section {
+    flex-direction: column;
+    padding-bottom: 0.25rem;
+  }
+
+  .sidebar-sheet-section {
+    flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+  }
+
+  .sidebar-sheet-section::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-divider {
+    width: 80%;
+    height: 1px;
+    flex-shrink: 0;
+    align-self: center;
+  }
+}
+
+@media (orientation: portrait) {
+  .sidebar-app-section {
+    flex-direction: row;
+    padding-right: 0.25rem;
+  }
+
+  .sidebar-sheet-section {
+    flex-direction: row;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .sidebar-sheet-section::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-divider {
+    height: 80%;
+    width: 1px;
+    flex-shrink: 0;
+    align-self: center;
+  }
+}
+
+/* View panel children: sheet and pooler scroll within their container */
+#view-sheet,
+#view-dice-pooler {
+  min-height: 100%;
 }
