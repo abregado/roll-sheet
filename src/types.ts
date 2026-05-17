@@ -112,12 +112,14 @@ export interface CharacterSheet {
 // === DICE POOLER ===
 
 export interface DiceFace {
-  kurzel: string;       // 1-2 char shown as the roll result
-  color: string;        // background hex color e.g. "#6366f1"
-  fontColor: string;    // text hex color e.g. "#ffffff"
-  faceImage?: string;   // SVG filename from public/svg/faces/
-  superShape?: string;  // particle SVG filename from public/svg/particles/
-  superColor?: string;  // hex color for super effect particles
+  kurzel: string;        // 1-2 char shown as the roll result
+  color: string;         // background hex color e.g. "#6366f1"
+  fontColor: string;     // text hex color e.g. "#ffffff"
+  shapeColor?: string;   // tint color for the die background shape SVG
+  faceShape?: string;    // SVG filename from public/svg/faces/ (overlay icon)
+  faceColor?: string;    // tint color for the face overlay SVG
+  superShape?: string;   // particle SVG filename from public/svg/particles/
+  superColor?: string;   // hex color for super effect particles
 }
 
 export interface CustomDie {

@@ -529,6 +529,45 @@ function createDefaultSheet(name?: string): CharacterSheet {
   };
 }
 
+function normalizeSvgContent(content: string): string {
+  content = content.replace(/fill="rgba\([^)]*,\s*([0-9.]+)\)"/g, (_m, a) => `fill="currentColor" fill-opacity="${a}"`);
+  content = content.replace(/stroke="rgba\([^)]*,\s*([0-9.]+)\)"/g, (_m, a) => `stroke="currentColor" stroke-opacity="${a}"`);
+  content = content.replace(/fill="(?!none|currentColor)[^"]*"/g, 'fill="currentColor"');
+  content = content.replace(/stroke="(?!none|currentColor)[^"]*"/g, 'stroke="currentColor"');
+  return content;
+}
+
+interface SvgCatalog {
+  dice: Record<string, string>;
+  faces: Record<string, string>;
+  particles: Record<string, string>;
+}
+
+function buildSvgCatalog(): SvgCatalog {
+  const catalog: SvgCatalog = { dice: {}, faces: {}, particles: {} };
+  const svgBase = path.join(__dirname, '../public/svg');
+  const dirs: (keyof SvgCatalog)[] = ['dice', 'faces', 'particles'];
+  dirs.forEach((dir) => {
+    const dirPath = path.join(svgBase, dir);
+    try {
+      const files = fs.readdirSync(dirPath).filter((f) => f.endsWith('.svg')).sort();
+      files.forEach((file) => {
+        try {
+          const raw = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+          catalog[dir][file] = normalizeSvgContent(raw.trim());
+        } catch {
+          console.error(`Failed to read SVG: ${dir}/${file}`);
+        }
+      });
+    } catch {
+      // Directory might not exist
+    }
+  });
+  return catalog;
+}
+
+const svgCatalog: SvgCatalog = buildSvgCatalog();
+
 // MIME types for static file serving
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -544,6 +583,13 @@ const MIME_TYPES: Record<string, string> = {
 
 // Create HTTP server for static files
 const server = http.createServer((req, res) => {
+  // SVG catalog endpoint
+  if (req.url === '/svg/catalog') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(svgCatalog));
+    return;
+  }
+
   let filePath = path.join(__dirname, '../public', req.url === '/' ? 'index.html' : req.url || '');
 
   const ext = path.extname(filePath);

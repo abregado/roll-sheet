@@ -32,9 +32,30 @@
   let renderedPoolIds = new Set();
   let isPoolerEditMode = false;
   let selectedConfiguratorDieId = null;
-  const PARTICLE_SHAPES = ['star1.svg', 'star2.svg', 'star3.svg', 'leaf1.svg', 'leaf2.svg', 'confetti1.svg', 'confetti2.svg'];
-  const DICE_SHAPES = ['d4.svg', 'd6.svg', 'd8.svg', 'd10.svg', 'd12.svg', 'd20.svg', 'circle.svg'];
   const particleImageCache = {}; // filename -> HTMLImageElement
+  let svgCatalog = null;
+
+  async function loadSvgCatalog() {
+    if (svgCatalog !== null) return svgCatalog;
+    try {
+      const res = await fetch('/svg/catalog');
+      svgCatalog = await res.json();
+    } catch {
+      svgCatalog = { dice: {}, faces: {}, particles: {} };
+    }
+    return svgCatalog;
+  }
+
+  function createInlineSVG(dir, filename, color) {
+    const container = document.createElement('span');
+    if (!filename || !svgCatalog || !svgCatalog[dir] || !svgCatalog[dir][filename]) {
+      if (filename) console.error(`SVG not found in catalog: ${dir}/${filename}`);
+      return container;
+    }
+    container.innerHTML = svgCatalog[dir][filename];
+    if (color) container.style.color = color;
+    return container;
+  }
 
   // DOM Elements
   const elements = {
@@ -3554,16 +3575,20 @@
     btn.style.setProperty('--die-bg', bgColor);
     btn.style.setProperty('--die-fg', fontColor);
 
-    const img = document.createElement('img');
-    img.src = '/svg/dice/' + die.backgroundShape;
-    img.className = 'die-shape';
-    img.alt = '';
+    const shapeEl = createInlineSVG('dice', die.backgroundShape, (face && face.shapeColor) ? face.shapeColor : '#ffffff');
+    shapeEl.className = 'die-shape';
+    btn.appendChild(shapeEl);
 
     const span = document.createElement('span');
     span.className = 'die-kurzel';
     span.textContent = kurzel || '?';
 
-    btn.appendChild(img);
+    if (face && face.faceShape) {
+      const faceEl = createInlineSVG('faces', face.faceShape, face.faceColor || '#ffffff');
+      faceEl.className = 'die-face-overlay';
+      btn.appendChild(faceEl);
+    }
+
     btn.appendChild(span);
 
     if (onClick) btn.addEventListener('click', onClick);
@@ -3695,7 +3720,7 @@
       if (configurator) configurator.hidden = false;
       if (poolerView) poolerView.classList.add('editing');
       renderConfiguratorDieList();
-      renderConfiguratorDieDetail();
+      loadSvgCatalog().then(() => renderConfiguratorDieDetail());
     } else {
       diceConfigDraft = null;
       selectedConfiguratorDieId = null;
@@ -3703,6 +3728,44 @@
       if (poolerView) poolerView.classList.remove('editing');
       renderPoolerSelector();
     }
+  }
+
+  function createSvgPicker(catalog, dir, currentValue, onChange, allowNone = true) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'face-picker';
+
+    if (allowNone) {
+      const noneBtn = document.createElement('button');
+      noneBtn.type = 'button';
+      noneBtn.className = 'face-picker-opt' + (!currentValue ? ' selected' : '');
+      noneBtn.textContent = '—';
+      noneBtn.title = 'None';
+      noneBtn.addEventListener('click', () => {
+        wrapper.querySelectorAll('.face-picker-opt').forEach(b => b.classList.remove('selected'));
+        noneBtn.classList.add('selected');
+        onChange(undefined);
+      });
+      wrapper.appendChild(noneBtn);
+    }
+
+    const files = (catalog && catalog[dir]) ? Object.keys(catalog[dir]) : [];
+    files.forEach(filename => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'face-picker-opt' + (currentValue === filename ? ' selected' : '');
+      btn.title = filename.replace('.svg', '');
+      const svgEl = createInlineSVG(dir, filename, '#ffffff');
+      svgEl.className = 'face-picker-svg';
+      btn.appendChild(svgEl);
+      btn.addEventListener('click', () => {
+        wrapper.querySelectorAll('.face-picker-opt').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        onChange(filename);
+      });
+      wrapper.appendChild(btn);
+    });
+
+    return wrapper;
   }
 
   function renderConfiguratorDieList() {
@@ -3740,28 +3803,22 @@
     });
     container.appendChild(kurzelRow);
 
-    // Background shape dropdown
+    // Background shape picker
     const shapeRow = document.createElement('div');
     shapeRow.className = 'configurator-field-row';
     const shapeLabel = document.createElement('label');
     shapeLabel.textContent = 'Shape';
-    const shapeSelect = document.createElement('select');
-    DICE_SHAPES.forEach(shape => {
-      const opt = document.createElement('option');
-      opt.value = shape;
-      opt.textContent = shape.replace('.svg', '');
-      if (shape === die.backgroundShape) opt.selected = true;
-      shapeSelect.appendChild(opt);
-    });
-    shapeSelect.addEventListener('change', () => {
-      die.backgroundShape = shapeSelect.value;
-      renderConfiguratorDieList();
-    });
+    const shapePicker = createSvgPicker(svgCatalog, 'dice', die.backgroundShape, filename => {
+      if (filename) {
+        die.backgroundShape = filename;
+        renderConfiguratorDieList();
+      }
+    }, false);
     shapeRow.appendChild(shapeLabel);
-    shapeRow.appendChild(shapeSelect);
+    shapeRow.appendChild(shapePicker);
     container.appendChild(shapeRow);
 
-    // Faces label
+    // Faces section
     const facesLabel = document.createElement('div');
     facesLabel.className = 'configurator-faces-label';
     facesLabel.textContent = 'Faces';
@@ -3777,21 +3834,39 @@
         const row = document.createElement('div');
         row.className = 'configurator-face-row';
 
+        // Header bar: face number + delete
+        const headerBar = document.createElement('div');
+        headerBar.className = 'configurator-face-header-bar';
         const numSpan = document.createElement('span');
         numSpan.className = 'face-num';
-        numSpan.textContent = idx + 1;
+        numSpan.textContent = `Face ${idx + 1}`;
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.type = 'button';
+        deleteBtn.title = 'Remove face';
+        deleteBtn.innerHTML = '&times;';
+        deleteBtn.addEventListener('click', () => {
+          if (die.faces.length > 1) { die.faces.splice(idx, 1); renderFaces(); }
+        });
+        headerBar.appendChild(numSpan);
+        headerBar.appendChild(deleteBtn);
+        row.appendChild(headerBar);
 
-        const bgColor = document.createElement('input');
-        bgColor.type = 'color';
-        bgColor.value = face.color || '#6d28d9';
-        bgColor.title = 'Background color';
-        bgColor.addEventListener('input', () => { face.color = bgColor.value; });
+        // Stack 1: BG / FG / Label / Shape tint
+        const stack1 = document.createElement('div');
+        stack1.className = 'configurator-face-stack';
 
-        const fgColor = document.createElement('input');
-        fgColor.type = 'color';
-        fgColor.value = face.fontColor || '#ffffff';
-        fgColor.title = 'Text color';
-        fgColor.addEventListener('input', () => { face.fontColor = fgColor.value; });
+        const bgColorInput = document.createElement('input');
+        bgColorInput.type = 'color';
+        bgColorInput.value = face.color || '#6d28d9';
+        bgColorInput.title = 'Background color';
+        bgColorInput.addEventListener('input', () => { face.color = bgColorInput.value; });
+
+        const fgColorInput = document.createElement('input');
+        fgColorInput.type = 'color';
+        fgColorInput.value = face.fontColor || '#ffffff';
+        fgColorInput.title = 'Text color';
+        fgColorInput.addEventListener('input', () => { face.fontColor = fgColorInput.value; });
 
         const kurzelInput = document.createElement('input');
         kurzelInput.type = 'text';
@@ -3802,48 +3877,64 @@
         kurzelInput.title = 'Result label';
         kurzelInput.addEventListener('input', () => { face.kurzel = kurzelInput.value; });
 
-        const superShapeSelect = document.createElement('select');
-        const noneOpt = document.createElement('option');
-        noneOpt.value = '';
-        noneOpt.textContent = '—';
-        superShapeSelect.appendChild(noneOpt);
-        PARTICLE_SHAPES.forEach(shape => {
-          const opt = document.createElement('option');
-          opt.value = shape;
-          opt.textContent = shape.replace('.svg', '');
-          if (shape === face.superShape) opt.selected = true;
-          superShapeSelect.appendChild(opt);
-        });
-        superShapeSelect.title = 'Super particle shape';
-        superShapeSelect.addEventListener('change', () => {
-          face.superShape = superShapeSelect.value || undefined;
-        });
+        const shapeColorInput = document.createElement('input');
+        shapeColorInput.type = 'color';
+        shapeColorInput.value = face.shapeColor || '#ffffff';
+        shapeColorInput.title = 'Shape tint';
+        shapeColorInput.addEventListener('input', () => { face.shapeColor = shapeColorInput.value; });
 
-        const superColor = document.createElement('input');
-        superColor.type = 'color';
-        superColor.value = face.superColor || '#fbbf24';
-        superColor.title = 'Super particle color';
-        superColor.addEventListener('input', () => { face.superColor = superColor.value; });
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'delete-btn';
-        deleteBtn.type = 'button';
-        deleteBtn.title = 'Remove face';
-        deleteBtn.innerHTML = '&times;';
-        deleteBtn.addEventListener('click', () => {
-          if (die.faces.length > 1) {
-            die.faces.splice(idx, 1);
-            renderFaces();
-          }
+        [
+          { label: 'BG', el: bgColorInput },
+          { label: 'FG', el: fgColorInput },
+          { label: 'Label', el: kurzelInput },
+          { label: 'Tint', el: shapeColorInput },
+        ].forEach(({ label, el }) => {
+          const lbl = document.createElement('span');
+          lbl.className = 'face-stack-label';
+          lbl.textContent = label;
+          stack1.appendChild(lbl);
+          stack1.appendChild(el);
         });
+        row.appendChild(stack1);
 
-        row.appendChild(numSpan);
-        row.appendChild(bgColor);
-        row.appendChild(fgColor);
-        row.appendChild(kurzelInput);
-        row.appendChild(superShapeSelect);
-        row.appendChild(superColor);
-        row.appendChild(deleteBtn);
+        // Stack 2: Face icon picker + tint
+        const stack2 = document.createElement('div');
+        stack2.className = 'configurator-face-stack';
+        const iconLabel = document.createElement('span');
+        iconLabel.className = 'face-stack-label';
+        iconLabel.textContent = 'Icon';
+        const facePicker = createSvgPicker(svgCatalog, 'faces', face.faceShape, filename => {
+          face.faceShape = filename;
+        });
+        const faceColorInput = document.createElement('input');
+        faceColorInput.type = 'color';
+        faceColorInput.value = face.faceColor || '#ffffff';
+        faceColorInput.title = 'Icon tint';
+        faceColorInput.addEventListener('input', () => { face.faceColor = faceColorInput.value; });
+        stack2.appendChild(iconLabel);
+        stack2.appendChild(facePicker);
+        stack2.appendChild(faceColorInput);
+        row.appendChild(stack2);
+
+        // Stack 3: Particle picker + tint
+        const stack3 = document.createElement('div');
+        stack3.className = 'configurator-face-stack';
+        const particleLabel = document.createElement('span');
+        particleLabel.className = 'face-stack-label';
+        particleLabel.textContent = 'Particle';
+        const particlePicker = createSvgPicker(svgCatalog, 'particles', face.superShape, filename => {
+          face.superShape = filename || undefined;
+        });
+        const superColorInput = document.createElement('input');
+        superColorInput.type = 'color';
+        superColorInput.value = face.superColor || '#fbbf24';
+        superColorInput.title = 'Particle color';
+        superColorInput.addEventListener('input', () => { face.superColor = superColorInput.value; });
+        stack3.appendChild(particleLabel);
+        stack3.appendChild(particlePicker);
+        stack3.appendChild(superColorInput);
+        row.appendChild(stack3);
+
         facesList.appendChild(row);
       });
     };
@@ -3973,8 +4064,36 @@
   function updateHistoryEntryInDom(entry) {
     const existing = elements.historyList.querySelector(`[data-entry-id="${entry.id}"]`);
     if (!existing) return;
+    const wasExpanded = existing.classList.contains('expanded');
     const updated = createHistoryElement(entry, false);
+    if (wasExpanded) {
+      updated.classList.add('expanded');
+      const details = updated.querySelector('.history-details');
+      const toggleBtn = updated.querySelector('.history-toggle');
+      if (details) details.hidden = false;
+      if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+    }
     elements.historyList.replaceChild(updated, existing);
+  }
+
+  // Build reroll columns: each column is a chain [original, reroll1, reroll2, ...]
+  function buildRerollColumns(instances) {
+    const byId = new Map(instances.map(i => [i.instanceId, i]));
+    const columns = [];
+    for (const inst of instances) {
+      if (!inst.rerolledFromInstanceId) {
+        const column = [inst];
+        let cur = inst;
+        while (cur.rerolledByInstanceId) {
+          const next = byId.get(cur.rerolledByInstanceId);
+          if (!next) break;
+          column.push(next);
+          cur = next;
+        }
+        columns.push(column);
+      }
+    }
+    return columns;
   }
 
   function createDicePoolHistoryElement(entry, isNew) {
@@ -3984,23 +4103,20 @@
 
     const instances = entry.diceInstances || [];
     const snapshot = entry.diceSnapshot || [];
+    const columns = buildRerollColumns(instances);
+    const hasRerolls = columns.some(col => col.length > 1);
 
-    // Determine if any non-rerolled die has a super face
-    const superInstances = instances.filter(inst => {
-      if (inst.isRerolled) return false;
+    // Super detection: check the final (active) die of each column
+    const finalInstances = columns.map(col => col[col.length - 1]);
+    const superInstances = finalInstances.filter(inst => {
       const die = snapshot.find(d => d.id === inst.dieId);
-      if (!die) return false;
-      const face = die.faces[inst.faceIndex];
+      const face = die && die.faces[inst.faceIndex];
       return face && face.superShape && face.superColor;
     });
-
     const isSuper = superInstances.length > 0;
 
-    if (isSuper && !isNew) {
-      el.classList.add('history-super');
-    }
+    if (isSuper && !isNew) el.classList.add('history-super');
 
-    // Gather super gradient colors for background
     let superGradient = '';
     if (isSuper) {
       const colors = [...new Set(superInstances.map(inst => {
@@ -4008,19 +4124,13 @@
         const face = die && die.faces[inst.faceIndex];
         return face ? face.superColor : null;
       }).filter(Boolean))];
-      if (colors.length === 1) {
-        superGradient = colors[0];
-      } else if (colors.length > 1) {
-        superGradient = `linear-gradient(135deg, ${colors.join(', ')})`;
-      }
+      superGradient = colors.length === 1 ? colors[0] : colors.length > 1 ? `linear-gradient(135deg, ${colors.join(', ')})` : '';
     }
-
-    // Build collapsed dice display (non-rerolled only)
-    const visibleInstances = instances.filter(inst => !inst.isRerolled);
 
     const header = document.createElement('div');
     header.className = 'history-header';
 
+    // Collapsed display: show only the final die from each column
     const diceDisplay = document.createElement('div');
     diceDisplay.className = 'history-pool-dice';
     if (superGradient) {
@@ -4028,8 +4138,7 @@
       diceDisplay.style.borderRadius = '6px';
       diceDisplay.style.padding = '0.25rem';
     }
-
-    visibleInstances.forEach(inst => {
+    finalInstances.forEach(inst => {
       const die = snapshot.find(d => d.id === inst.dieId);
       if (!die) return;
       const btn = createDieButton(die, inst.faceIndex, null);
@@ -4052,42 +4161,69 @@
     details.className = 'history-details';
     details.hidden = true;
 
-    // All dice including rerolled
-    const allDiceDiv = document.createElement('div');
-    allDiceDiv.className = 'history-pool-dice';
+    if (hasRerolls) {
+      const rerollsHeading = document.createElement('div');
+      rerollsHeading.className = 'history-rerolls-heading';
+      rerollsHeading.textContent = 'Rerolls';
+      details.appendChild(rerollsHeading);
 
-    instances.forEach(inst => {
-      const die = snapshot.find(d => d.id === inst.dieId);
-      if (!die) return;
-      const btn = createDieButton(die, inst.faceIndex, null);
-      if (inst.isRerolled) {
-        btn.classList.add('rerolled');
-        btn.style.cursor = 'default';
-        btn.style.pointerEvents = 'none';
-      } else {
+      const columnsDiv = document.createElement('div');
+      columnsDiv.className = 'history-pool-columns';
+
+      columns.forEach(column => {
+        const colDiv = document.createElement('div');
+        colDiv.className = 'history-pool-column';
+        column.forEach((inst, idx) => {
+          const isLast = idx === column.length - 1;
+          const die = snapshot.find(d => d.id === inst.dieId);
+          if (!die) return;
+          const btn = createDieButton(die, inst.faceIndex, null);
+          if (!isLast) {
+            btn.classList.add('rerolled');
+            btn.style.cursor = 'default';
+            btn.style.pointerEvents = 'none';
+          } else if (!inst.isRerolled) {
+            btn.title = 'Click to reroll';
+            btn.addEventListener('click', () => {
+              send({ type: 'rerollPoolDie', historyEntryId: entry.id, instanceId: inst.instanceId });
+            });
+          } else {
+            btn.style.cursor = 'default';
+            btn.style.pointerEvents = 'none';
+          }
+          colDiv.appendChild(btn);
+        });
+        columnsDiv.appendChild(colDiv);
+      });
+
+      details.appendChild(columnsDiv);
+    } else {
+      // No rerolls — flat list, all clickable
+      const allDiceDiv = document.createElement('div');
+      allDiceDiv.className = 'history-pool-dice';
+      columns.forEach(([inst]) => {
+        const die = snapshot.find(d => d.id === inst.dieId);
+        if (!die) return;
+        const btn = createDieButton(die, inst.faceIndex, null);
         btn.title = 'Click to reroll';
         btn.addEventListener('click', () => {
           send({ type: 'rerollPoolDie', historyEntryId: entry.id, instanceId: inst.instanceId });
         });
-      }
-      allDiceDiv.appendChild(btn);
-    });
-
-    details.appendChild(allDiceDiv);
+        allDiceDiv.appendChild(btn);
+      });
+      details.appendChild(allDiceDiv);
+    }
 
     // Save as template action
     const expandedActions = document.createElement('div');
     expandedActions.className = 'history-pool-expanded-actions';
-
     const saveDiv = document.createElement('div');
     saveDiv.className = 'pool-save-modal';
-
     const saveBtn = document.createElement('button');
     saveBtn.className = 'secondary-btn pool-save-modal';
     saveBtn.textContent = 'Save as Template';
     saveBtn.style.fontSize = '0.8rem';
     saveBtn.style.padding = '0.2rem 0.6rem';
-
     const sheetSelect = document.createElement('select');
     sheets.forEach(s => {
       const opt = document.createElement('option');
@@ -4096,18 +4232,13 @@
       if (s.id === currentSheetId) opt.selected = true;
       sheetSelect.appendChild(opt);
     });
-
     saveBtn.addEventListener('click', () => {
       const targetSheetId = sheetSelect.value;
-      if (targetSheetId !== currentSheetId || !currentSheet) {
-        alert('Please switch to that sheet first to save a template to it');
-        return;
-      }
+      if (targetSheetId !== currentSheetId || !currentSheet) { alert('Please switch to that sheet first'); return; }
       const name = prompt('Template name:', 'Dice Pool') || 'Dice Pool';
-      const dieIds = instances.filter(i => !i.isRerolled).map(i => i.dieId);
+      const dieIds = finalInstances.map(i => i.dieId);
       sendSheetAction({ type: 'createDicePoolTemplate', sheetId: targetSheetId, template: { type: 'dicePool', name, dieIds } });
     });
-
     saveDiv.appendChild(saveBtn);
     saveDiv.appendChild(sheetSelect);
     expandedActions.appendChild(saveDiv);
@@ -4122,7 +4253,6 @@
       el.classList.toggle('expanded', !expanded);
     });
 
-    // Trigger super effects for new entries
     if (isNew && isSuper) {
       setTimeout(() => {
         el.classList.add('history-upgrade-super');
@@ -4225,6 +4355,7 @@
     console.log('Roll Sheet initialized');
     setupEventListeners();
     setupResizer();
+    loadSvgCatalog();
     connect();
     // Initial view state
     const poolerView = document.getElementById('view-dice-pooler');
